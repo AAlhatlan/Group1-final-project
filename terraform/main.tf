@@ -27,7 +27,7 @@ module "database" {
 # 🔹 الكلاستر (نفس السابق)
 module "cluster" {
   source              = "./modules/cluster"
-  cluster_name        = "aks-demo"
+  cluster_name        = "aks-group1"
   location            = var.location
   resource_group_name = azurerm_resource_group.rg.name
   subnet_id           = module.network.aks_subnet_id
