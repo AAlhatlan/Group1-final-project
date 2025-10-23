@@ -49,7 +49,7 @@ jobs:
             --build-arg VITE_API_BASE_URL=${{ steps.backend_url.outputs.backend_url }} \
             -t ${{ env.FE_IMAGE }}:${{ steps.version.outputs.frontend }} \
             -t ${{ env.FE_IMAGE }}:latest \
-            -f frontend/Dockerfile .
+            -f frontend/Dockerfile frontend
 
           docker push ${{ env.FE_IMAGE }}:${{ steps.version.outputs.frontend }}
           docker push ${{ env.FE_IMAGE }}:latest
