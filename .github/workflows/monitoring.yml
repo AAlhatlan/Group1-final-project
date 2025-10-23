@@ -1,0 +1,56 @@
+name: Monitoring
+
+on:
+  schedule:
+    - cron: '0 */6 * * *' # Every 6 hours
+  workflow_dispatch:
+
+jobs:
+  availability-checks:
+    name: Availability Checks
+    runs-on: ubuntu-latest
+    env:
+      FRONTEND_URL: ${{ secrets.FRONTEND_URL || vars.FRONTEND_URL || '' }}
+      BACKEND_URL: ${{ secrets.BACKEND_URL || vars.BACKEND_URL || '' }}
+    steps:
+      - name: Backend health check
+        if: env.BACKEND_URL != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Checking backend health at: ${BACKEND_URL}/actuator/health"
+          resp=$(curl -sS -m 10 "${BACKEND_URL%/}/actuator/health" || true)
+          if echo "$resp" | grep -qi '"status"\s*:\s*"UP"'; then
+            echo "Backend is UP"
+            printf "\nBackend: OK (%s)\n" "$BACKEND_URL" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::error::Backend health check failed. Response: $resp"
+            printf "\nBackend: FAILED (%s)\n\nResponse:\n%s\n" "$BACKEND_URL" "$resp" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: Backend URL not set (skip)
+        if: env.BACKEND_URL == ''
+        run: echo "No BACKEND_URL provided; skipping backend health check." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Frontend availability check
+        if: env.FRONTEND_URL != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Checking frontend at: ${FRONTEND_URL}"
+          code=$(curl -sS -m 10 -o /dev/null -w "%{http_code}" "${FRONTEND_URL}") || true
+          echo "HTTP status: $code"
+          if [ "$code" -ge 200 ] && [ "$code" -lt 400 ]; then
+            echo "Frontend is reachable"
+            printf "\nFrontend: OK (%s) - HTTP %s\n" "$FRONTEND_URL" "$code" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::error::Frontend check failed with HTTP $code"
+            printf "\nFrontend: FAILED (%s) - HTTP %s\n" "$FRONTEND_URL" "$code" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: Frontend URL not set (skip)
+        if: env.FRONTEND_URL == ''
+        run: echo "No FRONTEND_URL provided; skipping frontend availability check." >> "$GITHUB_STEP_SUMMARY"
+

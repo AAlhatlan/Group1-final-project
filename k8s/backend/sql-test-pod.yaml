@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sql-test-pod
+  namespace: shop-maram
+spec:
+  containers:
+  - name: tester
+    image: appropriate/nc   # صورة خفيفة فيها netcat
+    command: ["sleep", "3600"]
