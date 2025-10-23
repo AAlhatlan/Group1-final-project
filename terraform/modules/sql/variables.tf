@@ -1,21 +1,28 @@
-variable "prefix" {
-  type = string
+variable "sql_server_name" {
+  description = "اسم Azure SQL Server"
 }
 
-variable "resource_group_name" {
-  type = string
+variable "db_name" {
+  description = "اسم قاعدة البيانات"
 }
 
 variable "location" {
-  type = string
+  description = "الموقع الجغرافي"
 }
 
-variable "sql_admin_login" {
-  type      = string
-  sensitive = true
+variable "resource_group_name" {
+  description = "اسم الـResource Group"
 }
 
-variable "sql_admin_password" {
-  type      = string
-  sensitive = true
+variable "admin_username" {
+  description = "اسم المستخدم للسيرفر"
+}
+
+variable "admin_password" {
+  description = "كلمة المرور للسيرفر"
+  sensitive   = true
+}
+
+variable "subnet_id" {
+  description = "ID الخاص بالـSubnet اللي يُسمح منها بالوصول"
 }

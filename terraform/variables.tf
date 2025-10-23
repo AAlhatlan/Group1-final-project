@@ -1,36 +1,16 @@
-variable "prefix" {
-  type = string
+variable "resource_group_name" {
+  default = "rg-demo"
 }
 
 variable "location" {
-  type    = string
-  default = "indonesiacentral"
+  default = "eastus"
 }
 
-variable "resource_group_name" {
-  type = string
+variable "db_admin_username" {
+  description = "اسم المستخدم لقاعدة البيانات"
 }
 
-variable "aks_cluster_name" {
-  type = string
-}
-
-variable "sql_admin_login" {
-  type      = string
-  sensitive = true
-}
-
-variable "sql_admin_password" {
-  type      = string
-  sensitive = true
-}
-
-variable "disk_size_gb" {
-  type    = number
-  default = 10
-}
-
-variable "disk_sku" {
-  type    = string
-  default = "Standard_LRS"
+variable "db_admin_password" {
+  description = "كلمة المرور لقاعدة البيانات"
+  sensitive   = true
 }

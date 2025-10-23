@@ -1,64 +1,34 @@
-
-data "azurerm_kubernetes_cluster" "aks" {
-  name                = var.aks_cluster_name
-  resource_group_name = var.resource_group_name
+# Resource Group
+resource "azurerm_resource_group" "rg" {
+  name     = var.resource_group_name
+  location = var.location
 }
 
+# 🔹 الشبكة
 module "network" {
   source              = "./modules/network"
-  prefix              = var.prefix
+  vnet_name           = "vnet-demo"
   location            = var.location
-  resource_group_name = var.resource_group_name
+  resource_group_name = azurerm_resource_group.rg.name
 }
 
-module "acr" {
-  source              = "./modules/acr"
-  prefix              = var.prefix
+# 🔹 قاعدة البيانات - Public access + selected networks
+module "database" {
+  source              = "./modules/database"
+  sql_server_name     = "sql-demo-server"
+  db_name             = "sqldb-demo"
   location            = var.location
-  resource_group_name = var.resource_group_name
+  resource_group_name = azurerm_resource_group.rg.name
+  admin_username      = var.db_admin_username
+  admin_password      = var.db_admin_password
+  subnet_id           = module.network.db_subnet_id
 }
 
-module "sql" {
-  source              = "./modules/sql"
-  prefix              = var.prefix
+# 🔹 الكلاستر (نفس السابق)
+module "cluster" {
+  source              = "./modules/cluster"
+  cluster_name        = "aks-demo"
   location            = var.location
-  resource_group_name = var.resource_group_name
-  sql_admin_login     = var.sql_admin_login
-  sql_admin_password  = var.sql_admin_password
-}
-
-module "privatelink" {
-  source                        = "./modules/privatelink"
-  prefix                        = var.prefix
-  location                      = var.location
-  resource_group_name           = var.resource_group_name
-  subnet_id                     = module.network.aks_subnet_id
-  sql_server_name               = module.sql.sql_server_name
-  vnet_id                       = module.network.vnet_id
-  sql_server_id                 = module.sql.sql_server_id
-}
-
-module "public_ip" {
-  source              = "./modules/public_ip"
-  prefix              = var.prefix
-  location            = var.location
-  resource_group_name = var.resource_group_name
-}
-
-resource "azurerm_managed_disk" "app_disk" {
-  name                 = "${var.prefix}-app-disk"
-  location             = var.location
-  resource_group_name  = var.resource_group_name
-  storage_account_type = var.disk_sku
-  disk_size_gb         = var.disk_size_gb
-  create_option        = "Empty"
-  tags = {
-    environment = "dev"
-  }
-}
-
-resource "azurerm_role_assignment" "acr_pull" {
-  scope                = module.acr.acr_id
-  role_definition_name = "AcrPull"
-  principal_id         = data.azurerm_kubernetes_cluster.aks.identity[0].principal_id
+  resource_group_name = azurerm_resource_group.rg.name
+  subnet_id           = module.network.aks_subnet_id
 }
