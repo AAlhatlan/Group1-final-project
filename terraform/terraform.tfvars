@@ -1,5 +1,5 @@
 prefix              = "grp1"
-location            = "eastus"
+location            = "indonesiacentral"
 resource_group_name = "rg-capstone-group1"
 
 aks_node_count = 2
