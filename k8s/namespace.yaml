@@ -1,4 +1,7 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: shop-maram
+  name: app
+  labels:
+    name: app
+    environment: production
