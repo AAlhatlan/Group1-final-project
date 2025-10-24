@@ -1,4 +1,7 @@
 # إنشاء Key Vault
+data "azurerm_client_config" "current" {}
+
+# إنشاء Key Vault
 resource "azurerm_key_vault" "main" {
   name                        = "${var.prefix}-kv"
   location                    = var.location
@@ -16,7 +19,7 @@ resource "azurerm_key_vault_access_policy" "aks" {
   object_id    = var.aks_managed_identity_id
 
   secret_permissions = [
-    "get",
-    "list"
+    "Get",
+    "List"
   ]
 }

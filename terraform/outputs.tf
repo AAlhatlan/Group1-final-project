@@ -15,5 +15,5 @@ output "sql_fqdn" {
 
 output "keyvault_uri" {
   description = "Key Vault URI"
-  value       = module.keyvault.keyvault_uri
+  value       = module.keyvault.key_vault_uri
 }
