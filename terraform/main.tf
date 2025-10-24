@@ -3,6 +3,13 @@ resource "azurerm_resource_group" "main" {
   location = var.location
 }
 
+module "storage_account" {
+  source              = "./modules/storage_account"
+  prefix              = var.prefix
+  location            = var.location
+  resource_group_name = azurerm_resource_group.main.name
+}
+
 module "networking" {
   source              = "./modules/networking"
   prefix              = var.prefix
