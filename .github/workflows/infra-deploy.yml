@@ -17,6 +17,9 @@ jobs:
       # Pass sensitive TF var from secrets (matches variable "sql_password")
       TF_VAR_sql_password: ${{ secrets.SQL_ADMIN_PASSWORD }}
 
+      # Azure region override; set in repo/org variables or secrets
+      TF_VAR_location: ${{ secrets.AZURE_LOCATION || vars.AZURE_LOCATION || 'eastus2' }}
+
       # Optional kubeconfig inputs for kubectl apply
       KUBE_CONFIG: ${{ secrets.KUBE_CONFIG || vars.KUBE_CONFIG || '' }}
       KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA || vars.KUBE_CONFIG_DATA || '' }}
@@ -41,6 +44,18 @@ jobs:
 
       - name: Terraform Apply
         run: terraform apply -auto-approve -lock=false -input=false
+
+      - name: Optional state cleanup for legacy ACR role assignment
+        if: always()
+        working-directory: terraform
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Remove legacy ACR-related resources from state if present to avoid unauthorized deletions
+          terraform state list | grep -q '^azurerm_role_assignment\.acr_pull$' && terraform state rm azurerm_role_assignment.acr_pull || true
+          terraform state list | grep -q '^module\.acr\.' && {
+            terraform state list | awk '/^module\.acr\./{print $0}' | xargs -r -n1 terraform state rm || true
+          } || true
 
       # ----- kubectl apply of k8s manifests -----
       - name: Detect k8s manifests
@@ -107,4 +122,3 @@ jobs:
           fi
           kubectl apply -R -f k8s
           printf "Applied manifests to namespace '%s'\n" "$K8S_NAMESPACE" >> "$GITHUB_STEP_SUMMARY"
-

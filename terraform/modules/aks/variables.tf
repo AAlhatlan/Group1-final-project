@@ -41,6 +41,19 @@ variable "subnet_id" {
   description = "Subnet ID where AKS will be deployed"
   type        = string
 }
+
+variable "service_cidr" {
+  description = "Kubernetes service CIDR"
+  type        = string
+  default     = "10.2.0.0/16"
+}
+
+variable "dns_service_ip" {
+  description = "Kubernetes DNS service IP"
+  type        = string
+  default     = "10.2.0.10"
+}
+
 variable "userpool_min_count" {
   description = "Minimum nodes for user node pool autoscaling"
   type        = number
