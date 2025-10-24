@@ -1,0 +1,110 @@
+name: "Terraform Deploy Only"
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  terraform_deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform
+
+    env:
+      # Pass sensitive TF var from secrets (matches variable "sql_password")
+      TF_VAR_sql_password: ${{ secrets.SQL_ADMIN_PASSWORD }}
+
+      # Optional kubeconfig inputs for kubectl apply
+      KUBE_CONFIG: ${{ secrets.KUBE_CONFIG || vars.KUBE_CONFIG || '' }}
+      KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA || vars.KUBE_CONFIG_DATA || '' }}
+      K8S_NAMESPACE: ${{ secrets.K8S_NAMESPACE || vars.K8S_NAMESPACE || 'default' }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Azure Login (Service Principal)
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.13.3
+
+      - name: Terraform Init
+        run: terraform init -input=false
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve -lock=false -input=false
+
+      # ----- kubectl apply of k8s manifests -----
+      - name: Detect k8s manifests
+        id: detect
+        working-directory: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -d k8s ]; then
+            files=$(find k8s -type f \( -name '*.yml' -o -name '*.yaml' \) -size +0c | sort || true)
+          else
+            files=""
+          fi
+          if [ -n "$files" ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+            printf '%s\n' "$files" > manifest-list.txt
+            echo "Manifests to apply:"; cat manifest-list.txt
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "No non-empty k8s manifests found; skipping apply."
+          fi
+
+      - name: Setup kubectl
+        if: steps.detect.outputs.found == 'true'
+        uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.30.0'
+
+      - name: Configure kubeconfig (direct)
+        if: steps.detect.outputs.found == 'true' && env.KUBE_CONFIG != ''
+        working-directory: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.kube
+          printf "%s" "$KUBE_CONFIG" > ~/.kube/config
+          chmod 600 ~/.kube/config
+          kubectl config view --minify || true
+
+      - name: Configure kubeconfig (base64)
+        if: steps.detect.outputs.found == 'true' && env.KUBE_CONFIG == '' && env.KUBE_CONFIG_DATA != ''
+        working-directory: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.kube
+          printf "%s" "$KUBE_CONFIG_DATA" | base64 -d > ~/.kube/config
+          chmod 600 ~/.kube/config
+          kubectl config view --minify || true
+
+      - name: Skip — no kubeconfig provided
+        if: steps.detect.outputs.found == 'true' && env.KUBE_CONFIG == '' && env.KUBE_CONFIG_DATA == ''
+        run: echo "No kubeconfig provided; skipping kubectl apply." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: kubectl apply manifests
+        if: steps.detect.outputs.found == 'true' && (env.KUBE_CONFIG != '' || env.KUBE_CONFIG_DATA != '')
+        working-directory: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Apply namespace first if a dedicated file exists
+          if [ -f k8s/namespace.yml ] || [ -f k8s/namespace.yaml ]; then
+            kubectl apply -f k8s/namespace.yml || kubectl apply -f k8s/namespace.yaml || true
+          fi
+          kubectl apply -R -f k8s
+          printf "Applied manifests to namespace '%s'\n" "$K8S_NAMESPACE" >> "$GITHUB_STEP_SUMMARY"
+
