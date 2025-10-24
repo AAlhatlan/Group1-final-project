@@ -1,69 +1,54 @@
-name: Infra (Terraform)
+name: Infra Deploy
 
 on:
-  push:
-    branches: [ main, master ]
-    paths:
-      - 'terraform/**'
-      - 'k8s/**'
-      - '.github/workflows/infra.yml'
-  pull_request:
-    paths:
-      - 'terraform/**'
-      - 'k8s/**'
-      - '.github/workflows/infra.yml'
   workflow_dispatch:
+  push:
+    branches: [ main ]
 
 jobs:
-  terraform-validate:
-    name: Terraform Fmt & Validate
+  terraform_apply:
+    name: Terraform Apply
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: terraform
+    env:
+      TF_VAR_sql_password: ${{ secrets.SQL_ADMIN_PASSWORD }}
+      TF_VAR_location: ${{ secrets.AZURE_LOCATION || vars.AZURE_LOCATION || 'eastus2' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.9.7
+          terraform_version: 1.13.3
 
-      - name: Check Terraform content
-        id: check
+      - name: Terraform Init (with backend)
+        run: terraform init -input=false
+
+      - name: Cleanup legacy ACR state (best-effort)
         shell: bash
         run: |
           set -euo pipefail
-          if find . -maxdepth 1 -name '*.tf' -type f -print0 | xargs -0 cat | awk 'NF{c=1} END{print (c?"true":"false")}' | tee /dev/stderr | grep -q true; then
-            echo "has_content=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_content=false" >> "$GITHUB_OUTPUT"
+          terraform state list | grep -q '^azurerm_role_assignment\.acr_pull$' && terraform state rm azurerm_role_assignment.acr_pull || true
+          if terraform state list | grep -q '^module\.acr\.'; then
+            terraform state list | awk '/^module\.acr\./{print $0}' | xargs -r -n1 terraform state rm || true
           fi
 
-      - name: Terraform fmt (check)
-        if: steps.check.outputs.has_content == 'true'
-        run: terraform fmt -check -diff -recursive
+      - name: Terraform Apply
+        run: terraform apply -auto-approve -lock=false -input=false
 
-      - name: Terraform init (no backend)
-        if: steps.check.outputs.has_content == 'true'
-        run: terraform init -backend=false -input=false
-
-      - name: Terraform validate
-        if: steps.check.outputs.has_content == 'true'
-        run: terraform validate
-
-      - name: Terraform plan (best-effort)
-        if: steps.check.outputs.has_content == 'true'
-        continue-on-error: true
-        run: terraform plan -input=false -no-color
-
-  k8s-apply:
-    name: Apply Kubernetes Manifests
+  k8s_apply:
+    name: Kubernetes Apply
     runs-on: ubuntu-latest
-    needs: []
+    needs: terraform_apply
     env:
-      # Provide one of these via repo or org secrets/variables
       KUBE_CONFIG: ${{ secrets.KUBE_CONFIG || vars.KUBE_CONFIG || '' }}
       KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA || vars.KUBE_CONFIG_DATA || '' }}
       K8S_NAMESPACE: ${{ secrets.K8S_NAMESPACE || vars.K8S_NAMESPACE || 'default' }}
@@ -77,7 +62,6 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p k8s || true
-          # Find non-empty YAML files
           files=$(find k8s -type f \( -name '*.yml' -o -name '*.yaml' \) -size +0c | sort || true)
           if [ -n "$files" ]; then
             echo "found=true" >> "$GITHUB_OUTPUT"
@@ -102,7 +86,7 @@ jobs:
           mkdir -p ~/.kube
           printf "%s" "$KUBE_CONFIG" > ~/.kube/config
           chmod 600 ~/.kube/config
-          kubectl config current-context || true
+          kubectl config view --minify || true
 
       - name: Configure kubeconfig (base64)
         if: steps.detect.outputs.found == 'true' && env.KUBE_CONFIG == '' && env.KUBE_CONFIG_DATA != ''
@@ -112,23 +96,20 @@ jobs:
           mkdir -p ~/.kube
           printf "%s" "$KUBE_CONFIG_DATA" | base64 -d > ~/.kube/config
           chmod 600 ~/.kube/config
-          kubectl config current-context || true
+          kubectl config view --minify || true
 
       - name: Skip — no kubeconfig provided
         if: steps.detect.outputs.found == 'true' && env.KUBE_CONFIG == '' && env.KUBE_CONFIG_DATA == ''
-        run: |
-          echo "No KUBE_CONFIG or KUBE_CONFIG_DATA provided; skipping kubectl apply." >> "$GITHUB_STEP_SUMMARY"
+        run: echo "No KUBE_CONFIG or KUBE_CONFIG_DATA provided; skipping kubectl apply." >> "$GITHUB_STEP_SUMMARY"
 
       - name: kubectl apply
         if: steps.detect.outputs.found == 'true' && (env.KUBE_CONFIG != '' || env.KUBE_CONFIG_DATA != '')
         shell: bash
         run: |
           set -euo pipefail
-          # Create namespace first if present
           if [ -f k8s/namespace.yml ] || [ -f k8s/namespace.yaml ]; then
             kubectl apply -f k8s/namespace.yml || kubectl apply -f k8s/namespace.yaml || true
           fi
-          # Apply all manifests recursively
           kubectl apply -R -f k8s
           printf "Applied manifests to namespace '%s'\n" "$K8S_NAMESPACE" >> "$GITHUB_STEP_SUMMARY"
 
