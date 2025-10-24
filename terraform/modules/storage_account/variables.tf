@@ -74,27 +74,33 @@ variable "min_tls_version" {
   }
 }
 
-variable "allow_blob_public_access" {
-  description = "Whether to allow public blob access."
-  type        = bool
-  default     = false
-}
-
-variable "enable_https_traffic_only" {
-  description = "Force HTTPS when communicating with the storage account."
-  type        = bool
-  default     = true
-}
-
-variable "kind" {
+variable "account_kind" {
   description = "Storage account kind."
   type        = string
   default     = "StorageV2"
 
   validation {
-    condition     = contains(["Storage", "StorageV2", "BlobStorage", "BlockBlobStorage", "FileStorage"], var.kind)
-    error_message = "kind must be one of Storage, StorageV2, BlobStorage, BlockBlobStorage, or FileStorage."
+    condition     = contains(["Storage", "StorageV2", "BlobStorage", "BlockBlobStorage", "FileStorage"], var.account_kind)
+    error_message = "account_kind must be one of Storage, StorageV2, BlobStorage, BlockBlobStorage, or FileStorage."
   }
+}
+
+variable "https_traffic_only_enabled" {
+  description = "Force HTTPS when communicating with the storage account."
+  type        = bool
+  default     = true
+}
+
+variable "public_network_access_enabled" {
+  description = "Allow public network access."
+  type        = bool
+  default     = true
+}
+
+variable "allow_nested_items_to_be_public" {
+  description = "Whether nested items within the storage account can be public."
+  type        = bool
+  default     = false
 }
 
 variable "tags" {
