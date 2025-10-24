@@ -1,38 +1,19 @@
-# 🗺️ الشبكة
-output "vnet_id" {
-  description = "ID الخاص بالـVirtual Network"
-  value       = module.network.vnet_id
+output "aks_name" {
+  description = "AKS cluster name"
+  value       = module.aks.aks_name
 }
 
-output "aks_subnet_id" {
-  description = "ID الخاص بالـSubnet الخاصة بالـAKS"
-  value       = module.network.aks_subnet_id
+output "acr_login_server" {
+  description = "ACR login server"
+  value       = module.acr.acr_login_server
 }
 
-output "db_subnet_id" {
-  description = "ID الخاص بالـSubnet الخاصة بالـSQL Server"
-  value       = module.network.db_subnet_id
+output "sql_fqdn" {
+  description = "SQL fully qualified domain name"
+  value       = module.sql.sql_fqdn
 }
 
-# ☸️ الكلاستر
-output "aks_kube_config" {
-  description = "Kubeconfig للاتصال بالـAKS Cluster"
-  value       = module.cluster.kube_config
-  sensitive   = true
-}
-
-# 🗄️ قاعدة البيانات (Azure SQL)
-output "sql_server_name" {
-  description = "اسم Azure SQL Server"
-  value       = module.database.sql_server_name
-}
-
-output "sql_server_fqdn" {
-  description = "الـFQDN (نقطة الاتصال العامة) لـ Azure SQL Server"
-  value       = module.database.sql_server_fqdn
-}
-
-output "sql_database_name" {
-  description = "اسم قاعدة البيانات داخل السيرفر"
-  value       = module.database.sql_db_name
+output "keyvault_uri" {
+  description = "Key Vault URI"
+  value       = module.keyvault.keyvault_uri
 }

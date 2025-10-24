@@ -1,34 +1,44 @@
-# Resource Group
-resource "azurerm_resource_group" "rg" {
-  name     = var.resource_group_name
+module "networking" {
+  source = "./modules/networking"
+  prefix = var.prefix
   location = var.location
+  resource_group_name = var.resource_group_name
+  vnet_address_space = var.vnet_address_space
 }
 
-# 🔹 الشبكة
-module "network" {
-  source              = "./modules/network"
-  vnet_name           = "vnet-demo"
-  location            = var.location
-  resource_group_name = azurerm_resource_group.rg.name
+module "aks" {
+  source = "./modules/aks"
+  prefix = var.prefix
+  location = var.location
+  resource_group_name = var.resource_group_name
+  node_count = var.aks_node_count
+  vm_size = var.aks_vm_size
+  min_count = var.aks_min_count
+  max_count = var.aks_max_count
+  subnet_id = module.networking.aks_subnet_id
 }
 
-# 🔹 قاعدة البيانات - Public access + selected networks
-module "database" {
-  source              = "./modules/database"
-  sql_server_name     = "sql-demo-server"
-  db_name             = "sqldb-demo"
-  location            = var.location
-  resource_group_name = azurerm_resource_group.rg.name
-  admin_username      = var.db_admin_username
-  admin_password      = var.db_admin_password
-  subnet_id           = module.network.db_subnet_id
+module "acr" {
+  source = "./modules/acr"
+  prefix = var.prefix
+  location = var.location
+  resource_group_name = var.resource_group_name
 }
 
-# 🔹 الكلاستر (نفس السابق)
-module "cluster" {
-  source              = "./modules/cluster"
-  cluster_name        = "aks-demo"
-  location            = var.location
-  resource_group_name = azurerm_resource_group.rg.name
-  subnet_id           = module.network.aks_subnet_id
+module "sql" {
+  source = "./modules/sql"
+  prefix = var.prefix
+  location = var.location
+  resource_group_name = var.resource_group_name
+  sql_admin_username = var.sql_admin      # مطابق لاسم المتغير داخل module
+  sql_admin_password = var.sql_password   
+  subnet_id = module.networking.aks_subnet_id
+}
+
+
+module "keyvault" {
+  source = "./modules/keyvault"
+  prefix = var.prefix
+  location = var.location
+  resource_group_name = var.resource_group_name
 }

@@ -13,18 +13,7 @@ variable "resource_group_name" {
   type        = string
 }
 
-variable "sql_admin_username" {
-  description = "SQL admin username"
-  type        = string
-}
-
-variable "sql_admin_password" {
-  description = "SQL admin password"
-  type        = string
-  sensitive   = true
-}
-
-variable "subnet_id" {
-  description = "Subnet ID for Private Endpoint"
+variable "aks_managed_identity_id" {
+  description = "Managed Identity ID of AKS for Key Vault access"
   type        = string
 }
