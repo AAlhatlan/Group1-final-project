@@ -28,21 +28,31 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.13.3
+          terraform_wrapper: false
+
+      - name: Show Terraform version and path
+        id: tfver
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform version
+          echo "TF_BIN=$(command -v terraform)" >> "$GITHUB_ENV"
+          echo "bin=$(command -v terraform)" >> "$GITHUB_OUTPUT"
 
       - name: Terraform Init (with backend)
-        run: terraform init -input=false
+        run: $TF_BIN init -input=false -upgrade
 
       - name: Cleanup legacy ACR state (best-effort)
         shell: bash
         run: |
           set -euo pipefail
-          terraform state list | grep -q '^azurerm_role_assignment\.acr_pull$' && terraform state rm azurerm_role_assignment.acr_pull || true
-          if terraform state list | grep -q '^module\.acr\.'; then
-            terraform state list | awk '/^module\.acr\./{print $0}' | xargs -r -n1 terraform state rm || true
+          $TF_BIN state list | grep -q '^azurerm_role_assignment\.acr_pull$' && $TF_BIN state rm azurerm_role_assignment.acr_pull || true
+          if $TF_BIN state list | grep -q '^module\.acr\.'; then
+            $TF_BIN state list | awk '/^module\.acr\./{print $0}' | xargs -r -n1 $TF_BIN state rm || true
           fi
 
       - name: Terraform Apply
-        run: terraform apply -auto-approve -lock=false -input=false
+        run: $TF_BIN apply -auto-approve -lock=false -input=false
 
   k8s_apply:
     name: Kubernetes Apply
