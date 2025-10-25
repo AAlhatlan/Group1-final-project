@@ -110,14 +110,23 @@ jobs:
           cleanup() { rm -f "$tmp" "$decode_err"; }
           trap cleanup EXIT
 
-          if [ -n "$BASE64_KUBECONFIG" ]; then
-            if printf "%s" "$BASE64_KUBECONFIG" | base64 -d > "$tmp" 2>"$decode_err"; then
-              source_label="KUBE_CONFIG_DATA"
-            else
-              echo "::error::Failed to decode KUBE_CONFIG_DATA as base64."
-              cat "$decode_err" >&2
-              exit 1
+          try_raw_fallback() {
+            printf "%s" "$1" > "$tmp"
+            source_label=$2
+          }
+
+          try_base64_or_raw() {
+            local value=$1 label=$2
+            if printf "%s" "$value" | base64 -d > "$tmp" 2>"$decode_err"; then
+              source_label="$label (base64)"
+              return 0
             fi
+            echo "Value from $label failed base64 decode; treating as plaintext." >&2
+            try_raw_fallback "$value" "$label"
+          }
+
+          if [ -n "$BASE64_KUBECONFIG" ]; then
+            try_base64_or_raw "$BASE64_KUBECONFIG" "KUBE_CONFIG_DATA"
           elif [ -n "$RAW_KUBECONFIG" ]; then
             if printf "%s" "$RAW_KUBECONFIG" | base64 -d > "$tmp" 2>/dev/null; then
               source_label="KUBE_CONFIG (base64)"
