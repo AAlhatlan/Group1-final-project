@@ -161,6 +161,15 @@ jobs:
           if [ -f k8s/namespace.yml ] || [ -f k8s/namespace.yaml ]; then
             kubectl apply -f k8s/namespace.yml || kubectl apply -f k8s/namespace.yaml || true
           fi
+
+          # Apply ingress controller first (if present) and wait for webhook readiness
+          if [ -f k8s/frontend/deploy.yaml ]; then
+            echo "Applying ingress-nginx controller manifest first..."
+            kubectl apply -f k8s/frontend/deploy.yaml
+            echo "Waiting for ingress-nginx controller to be ready..."
+            kubectl -n ingress-nginx rollout status deploy/ingress-nginx-controller --timeout=240s
+          fi
+
           kubectl apply -R -f k8s
           printf "Applied manifests to namespace '%s'\n" "$K8S_NAMESPACE" >> "$GITHUB_STEP_SUMMARY"
 
