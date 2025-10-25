@@ -1,7 +1,11 @@
 import axios from 'axios';
 import type { Ingredient, CartItem, Order, IngredientsResponse, IngredientCategory } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ;
+const resolvedEnvUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '');
+const fallbackUrl =
+  typeof window !== 'undefined' ? window.location.origin : 'http://localhost:8080';
+
+const API_BASE_URL = resolvedEnvUrl || fallbackUrl;
 
 // Debug: Log the API URL to help with troubleshooting
 console.log('API_BASE_URL:', API_BASE_URL);
@@ -80,4 +84,3 @@ export const getOrdersBySession = async (sessionId: string): Promise<Order[]> =>
 };
 
 export default apiClient;
-
