@@ -42,6 +42,11 @@ variable "subnet_id" {
   type        = string
 }
 
+variable "temp_node_pool_name" {
+  description = "Temporary name used when rotating the default node pool"
+  type        = string
+}
+
 variable "service_cidr" {
   description = "Kubernetes service CIDR"
   type        = string
