@@ -22,7 +22,7 @@ variable "node_count" {
 variable "vm_size" {
   description = "VM size for nodes"
   type        = string
-  default     = "Standard_B2s"
+  default     = "Standard_B1s"
 }
 
 variable "min_count" {
@@ -39,6 +39,11 @@ variable "max_count" {
 
 variable "subnet_id" {
   description = "Subnet ID where AKS will be deployed"
+  type        = string
+}
+
+variable "temp_node_pool_name" {
+  description = "Temporary name used when rotating the default node pool"
   type        = string
 }
 

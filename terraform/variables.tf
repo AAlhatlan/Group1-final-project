@@ -31,7 +31,7 @@ variable "aks_node_count" {
 variable "aks_vm_size" {
   description = "VM size for AKS nodes"
   type        = string
-  default     = "Standard_B2s"
+  default     = "Standard_E2bds_v5"
 }
 
 variable "aks_min_count" {
@@ -56,4 +56,15 @@ variable "sql_password" {
   description = "SQL admin password"
   type        = string
   sensitive   = true
+}
+
+variable "random_suffix_length" {
+  description = "Length of the random suffix appended to resource names"
+  type        = number
+  default     = 4
+
+  validation {
+    condition     = var.random_suffix_length >= 3 && var.random_suffix_length <= 8
+    error_message = "random_suffix_length must be between 3 and 8 to keep names short yet unique."
+  }
 }

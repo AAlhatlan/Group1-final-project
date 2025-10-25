@@ -1,11 +1,13 @@
 prefix              = "grp1"
 location            = "indonesiacentral"
-resource_group_name = "rg-capstone-group1"
+resource_group_name = "rg-capstone-group1-indonesiacentral"
 
 aks_node_count = 2
-aks_vm_size    = "Standard_B2s"
+aks_vm_size    = "Standard_E2bds_v5"
 aks_min_count  = 2
 aks_max_count  = 5
 
 sql_admin    = "sqladmin"
 sql_password = "MyStrongP@ssword123"
+
+random_suffix_length = 4

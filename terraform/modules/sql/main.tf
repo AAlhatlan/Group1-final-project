@@ -10,9 +10,10 @@ resource "azurerm_mssql_server" "main" {
 
 # إنشاء Azure SQL Database (MSSQL)
 resource "azurerm_mssql_database" "main" {
-  name      = "${var.prefix}-sqldb"
-  server_id = azurerm_mssql_server.main.id
-  sku_name  = "S0"
+  name                 = "${var.prefix}-sqldb"
+  server_id            = azurerm_mssql_server.main.id
+  sku_name             = "S0"
+  storage_account_type = "Local"
 }
 
 # Private Endpoint للـ SQL

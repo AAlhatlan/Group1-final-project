@@ -15,10 +15,11 @@ resource "azurerm_kubernetes_cluster" "aks" {
   dns_prefix          = "${var.prefix}-dns"
 
   default_node_pool {
-    name           = "default"
-    node_count     = var.node_count
-    vm_size        = var.vm_size
-    vnet_subnet_id = var.subnet_id
+    name                        = "default"
+    node_count                  = var.node_count
+    vm_size                     = var.vm_size
+    vnet_subnet_id              = var.subnet_id
+    temporary_name_for_rotation = var.temp_node_pool_name
   }
 
   identity {
@@ -39,14 +40,15 @@ resource "azurerm_kubernetes_cluster" "aks" {
   }
 }
 
-# Node Pool إضافي للـ autoscaling
+/* Temporarily disable the extra user node pool deployment.
 resource "azurerm_kubernetes_cluster_node_pool" "userpool" {
   name                  = "userpool"
   kubernetes_cluster_id = azurerm_kubernetes_cluster.aks.id
   vm_size               = var.vm_size
-  node_count            = var.node_count
+  auto_scaling_enabled  = true
   min_count             = var.userpool_min_count
   max_count             = var.userpool_max_count
   mode                  = "User"
 }
+*/
 
