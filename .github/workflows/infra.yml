@@ -163,9 +163,9 @@ jobs:
           fi
 
           # Apply ingress controller first (if present) and wait for webhook readiness
-          if [ -f k8s/frontend/deploy.yaml ]; then
+          if [ -f k8s/ingress-controller/ingress-nginx.yaml ]; then
             echo "Applying ingress-nginx controller manifest first..."
-            kubectl apply -f k8s/frontend/deploy.yaml
+            kubectl apply -f k8s/ingress-controller/ingress-nginx.yaml
             echo "Waiting for ingress-nginx controller to be ready..."
             kubectl -n ingress-nginx rollout status deploy/ingress-nginx-controller --timeout=240s
           fi
