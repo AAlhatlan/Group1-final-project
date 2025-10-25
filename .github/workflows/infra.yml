@@ -88,32 +88,63 @@ jobs:
         with:
           version: 'v1.30.0'
 
-      - name: Configure kubeconfig (direct)
-        if: steps.detect.outputs.found == 'true' && env.KUBE_CONFIG != ''
+      - name: Prepare kubeconfig
+        if: steps.detect.outputs.found == 'true'
+        id: kubeconfig
         shell: bash
+        env:
+          RAW_KUBECONFIG: ${{ env.KUBE_CONFIG }}
+          BASE64_KUBECONFIG: ${{ env.KUBE_CONFIG_DATA }}
         run: |
           set -euo pipefail
           mkdir -p ~/.kube
-          printf "%s" "$KUBE_CONFIG" > ~/.kube/config
-          chmod 600 ~/.kube/config
-          kubectl config view --minify || true
 
-      - name: Configure kubeconfig (base64)
-        if: steps.detect.outputs.found == 'true' && env.KUBE_CONFIG == '' && env.KUBE_CONFIG_DATA != ''
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p ~/.kube
-          printf "%s" "$KUBE_CONFIG_DATA" | base64 -d > ~/.kube/config
+          if [ -z "$RAW_KUBECONFIG" ] && [ -z "$BASE64_KUBECONFIG" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          tmp=$(mktemp)
+          decode_err=$(mktemp)
+          source_label=""
+          cleanup() { rm -f "$tmp" "$decode_err"; }
+          trap cleanup EXIT
+
+          if [ -n "$BASE64_KUBECONFIG" ]; then
+            if printf "%s" "$BASE64_KUBECONFIG" | base64 -d > "$tmp" 2>"$decode_err"; then
+              source_label="KUBE_CONFIG_DATA"
+            else
+              echo "::error::Failed to decode KUBE_CONFIG_DATA as base64."
+              cat "$decode_err" >&2
+              exit 1
+            fi
+          elif [ -n "$RAW_KUBECONFIG" ]; then
+            if printf "%s" "$RAW_KUBECONFIG" | base64 -d > "$tmp" 2>/dev/null; then
+              source_label="KUBE_CONFIG (base64)"
+            else
+              printf "%s" "$RAW_KUBECONFIG" > "$tmp"
+              source_label="KUBE_CONFIG"
+            fi
+          fi
+
+          mv "$tmp" ~/.kube/config
           chmod 600 ~/.kube/config
-          kubectl config view --minify || true
+
+          if kubectl config view --minify >/dev/null 2>&1; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            echo "source=$source_label" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Provided kubeconfig from $source_label is invalid (missing apiVersion/kind)."
+            sed 's/^/INVALID: /' ~/.kube/config >&2
+            exit 1
+          fi
 
       - name: Skip — no kubeconfig provided
-        if: steps.detect.outputs.found == 'true' && env.KUBE_CONFIG == '' && env.KUBE_CONFIG_DATA == ''
+        if: steps.detect.outputs.found == 'true' && steps.kubeconfig.outputs.configured != 'true'
         run: echo "No KUBE_CONFIG or KUBE_CONFIG_DATA provided; skipping kubectl apply." >> "$GITHUB_STEP_SUMMARY"
 
       - name: kubectl apply
-        if: steps.detect.outputs.found == 'true' && (env.KUBE_CONFIG != '' || env.KUBE_CONFIG_DATA != '')
+        if: steps.detect.outputs.found == 'true' && steps.kubeconfig.outputs.configured == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -124,7 +155,7 @@ jobs:
           printf "Applied manifests to namespace '%s'\n" "$K8S_NAMESPACE" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Check rollout (best-effort)
-        if: steps.detect.outputs.found == 'true' && (env.KUBE_CONFIG != '' || env.KUBE_CONFIG_DATA != '')
+        if: steps.detect.outputs.found == 'true' && steps.kubeconfig.outputs.configured == 'true'
         continue-on-error: true
         shell: bash
         run: |
