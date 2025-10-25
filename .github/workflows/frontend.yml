@@ -87,21 +87,25 @@ jobs:
           if [ "${{ steps.kubeconfig.outputs.configured }}" = "true" ]; then
             ingress="${BACKEND_INGRESS:-backend-services}"
             ns="${K8S_NAMESPACE:-default}"
-            ip=$(kubectl -n "$ns" get ingress "$ingress" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
             host=$(kubectl -n "$ns" get ingress "$ingress" -o jsonpath='{.spec.rules[0].host}' 2>/dev/null || true)
 
-            if [ -n "$ip" ]; then
-              url="http://$ip"
-            elif [ -n "$host" ] && [ "$host" != "*" ]; then
-              url="http://$host"
+            if [ -z "$host" ] || [ "$host" = "*" ]; then
+              ip=$(kubectl -n "$ns" get ingress "$ingress" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
+              if [ -n "$ip" ]; then
+                host="$ip"
+              fi
+            fi
+
+            if [ -n "$host" ] && [ "$host" != "*" ]; then
+              url="http://$host/api"
             else
-              url="$default_url"
+              url="$default_url/api"
             fi
           else
-            url="$default_url"
+            url="$default_url/api"
           fi
 
-          # Ensure no trailing slash
+          # Ensure no trailing slash at the end
           url="${url%/}"
           echo "backend_url=$url" >> "$GITHUB_OUTPUT"
           echo "Using backend URL: $url"
