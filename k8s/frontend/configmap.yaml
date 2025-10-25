@@ -2,6 +2,6 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: frontend-config
-  namespace: shop-maram
+  namespace: grp1-app
 data:
-  REACT_APP_API_URL: "http://48.193.24.54.nip.io/api"
+  VITE_API_BASE_URL: "http://48.193.24.54.nip.io/api"

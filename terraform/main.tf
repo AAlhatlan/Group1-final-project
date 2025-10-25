@@ -1,11 +1,5 @@
-resource "random_string" "suffix" {
-  length  = var.random_suffix_length
-  upper   = false
-  special = false
-}
-
 locals {
-  deploy_prefix       = "${var.prefix}-${random_string.suffix.result}"
+  deploy_prefix       = var.prefix
   effective_rg_name   = var.resource_group_name != "" ? var.resource_group_name : "rg-${local.deploy_prefix}"
   effective_location  = var.location
   node_pool_temp_name = substr(replace(local.deploy_prefix, "-", ""), 0, 9)

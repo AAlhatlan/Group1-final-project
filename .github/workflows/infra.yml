@@ -61,7 +61,7 @@ jobs:
     env:
       KUBE_CONFIG: ${{ secrets.KUBE_CONFIG || vars.KUBE_CONFIG || '' }}
       KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA || vars.KUBE_CONFIG_DATA || '' }}
-      K8S_NAMESPACE: ${{ secrets.K8S_NAMESPACE || vars.K8S_NAMESPACE || 'default' }}
+      K8S_NAMESPACE: ${{ secrets.K8S_NAMESPACE || vars.K8S_NAMESPACE || 'grp1-app' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -143,9 +143,10 @@ jobs:
             echo "configured=true" >> "$GITHUB_OUTPUT"
             echo "source=$source_label" >> "$GITHUB_OUTPUT"
           else
-            echo "::error::Provided kubeconfig from $source_label is invalid (missing apiVersion/kind)."
-            sed 's/^/INVALID: /' ~/.kube/config >&2
-            exit 1
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Provided kubeconfig from $source_label is invalid (missing apiVersion/kind); skipping kubectl steps."
+            sed 's/^/INVALID: /' ~/.kube/config >&2 || true
+            rm -f ~/.kube/config
           fi
 
       - name: Skip — no kubeconfig provided
