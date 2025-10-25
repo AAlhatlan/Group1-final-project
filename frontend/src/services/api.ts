@@ -1,7 +1,7 @@
 import axios from 'axios';
 import type { Ingredient, CartItem, Order, IngredientsResponse, IngredientCategory } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ;
 
 // Debug: Log the API URL to help with troubleshooting
 console.log('API_BASE_URL:', API_BASE_URL);
