@@ -6,10 +6,9 @@ metadata:
   annotations:
     nginx.ingress.kubernetes.io/rewrite-target: /
 spec:
-  ingressClassName: nginx      # يطابق الـIngress Controller
+  ingressClassName: nginx
   rules:
-    - host: 48.193.24.54.nip.io  # الـStatic IP الجديد
-      http:
+    - http:
         paths:
           - path: /
             pathType: Prefix
