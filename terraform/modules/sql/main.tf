@@ -6,7 +6,7 @@ resource "azurerm_mssql_server" "main" {
   version                       = "12.0"
   administrator_login           = var.sql_admin_username
   administrator_login_password  = var.sql_admin_password
-  public_network_access_enabled = true
+  public_network_access_enabled = false
 }
 
 # إنشاء Azure SQL Database (MSSQL)
@@ -30,13 +30,4 @@ resource "azurerm_private_endpoint" "sql" {
     subresource_names              = ["sqlServer"]
     is_manual_connection           = false
   }
-}
-
-# Allow Azure services (including AKS egress) to reach SQL public endpoint
-resource "azurerm_mssql_firewall_rule" "allow_azure" {
-  name      = "${var.prefix}-allow-azure"
-  server_id = azurerm_mssql_server.main.id
-
-  start_ip_address = "0.0.0.0"
-  end_ip_address   = "0.0.0.0"
 }
