@@ -4,4 +4,4 @@ metadata:
   name: frontend-config
   namespace: grp1-app
 data:
-  VITE_API_BASE_URL: "http://48.193.24.54.nip.io/api"
+  VITE_API_BASE_URL: "http://48.193.24.54.nip.io"

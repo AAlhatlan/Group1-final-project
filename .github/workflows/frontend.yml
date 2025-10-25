@@ -101,8 +101,8 @@ jobs:
             url="$default_url"
           fi
 
-          # Append /api since frontend hits API gateway via /api path
-          url="${url%/}/api"
+          # Ensure no trailing slash
+          url="${url%/}"
           echo "backend_url=$url" >> "$GITHUB_OUTPUT"
           echo "Using backend URL: $url"
 
