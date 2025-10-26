@@ -22,7 +22,7 @@ variable "node_count" {
 variable "vm_size" {
   description = "VM size for nodes"
   type        = string
-  default     = "Standard_B4ms"
+  default     = "Standard_B2s"
 }
 
 variable "min_count" {
