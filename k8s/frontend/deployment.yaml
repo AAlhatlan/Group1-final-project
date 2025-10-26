@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: frontend-deployment
+  name: app-frontend-deployment
   namespace: app
 spec:
   replicas: 3
@@ -25,7 +25,7 @@ spec:
             - containerPort: 80
           envFrom:
             - configMapRef:
-                name: frontend-config
+                name: app-frontend-config
           
           livenessProbe:
             httpGet:

@@ -122,7 +122,7 @@ jobs:
       - name: Deploy backend manifests
         run: |
           kubectl apply -f k8s/backend/ -n app
-          kubectl rollout status deployment/backend-deployment -n app --timeout=180s
+          kubectl rollout status deployment/app-backend-deployment -n app --timeout=180s
 
       - name: Summarize deployment
         run: |
