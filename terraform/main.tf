@@ -48,13 +48,3 @@ module "sql" {
   sql_admin_password  = var.sql_password
   aks_subnet_id       = module.networking.aks_subnet_id
 }
-
-module "keyvault" {
-  source                  = "./modules/KeyVault"
-  prefix                  = local.deploy_prefix
-  location                = local.effective_location
-  resource_group_name     = azurerm_resource_group.main.name
-  aks_managed_identity_id = module.aks.aks_identity_id
-  sql_admin_username      = var.sql_admin
-  sql_admin_password      = var.sql_password
-}

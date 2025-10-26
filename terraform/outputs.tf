@@ -8,16 +8,6 @@ output "sql_fqdn" {
   value       = module.sql.sql_fqdn
 }
 
-output "keyvault_uri" {
-  description = "Key Vault URI"
-  value       = module.keyvault.key_vault_uri
-}
-
-output "keyvault_name" {
-  description = "Key Vault name"
-  value       = module.keyvault.key_vault_name
-}
-
 output "storage_account_name" {
   description = "Storage account name"
   value       = module.storage_account.storage_account_name

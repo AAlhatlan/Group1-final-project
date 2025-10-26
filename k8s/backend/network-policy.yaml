@@ -1,0 +1,48 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-netpol
+  namespace: app
+spec:
+  podSelector:
+    matchLabels:
+      app: backend
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: frontend
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8080
+
+spec:
+  policyTypes:
+    - Ingress
+    - Egress  # أضف هذا
+  
+  # بعد ingress، أضف:
+  egress:
+    # للـ DNS
+    - to:
+      - namespaceSelector:
+          matchLabels:
+            name: kube-system
+      ports:
+      - protocol: UDP
+        port: 53
+    
+    # لـ Azure SQL
+    - ports:
+      - protocol: TCP
+        port: 1433
+    
+    # للاتصالات الصادرة عبر HTTPS
+    - ports:
+      - protocol: TCP
+        port: 443

@@ -2,7 +2,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: frontend-service
-  namespace: grp1-app
+  namespace: app
 spec:
   selector:
     app: frontend

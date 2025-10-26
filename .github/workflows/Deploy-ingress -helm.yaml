@@ -1,0 +1,46 @@
+name: Deploy Ingress NGINX with Helm
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy-ingress:
+    name: Deploy Ingress NGINX
+    runs-on: ubuntu-latest
+    steps:
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      
+      - name: Set AKS Context
+        uses: azure/aks-set-context@v3
+        with:
+          resource-group: ${{ vars.AZURE_RESOURCE_GROUP }}
+          cluster-name: ${{ vars.AKS_CLUSTER_NAME }}
+      
+      - name: Install Ingress NGINX
+        run: |
+          helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+          helm repo update
+          helm install grp1-ingress ingress-nginx/ingress-nginx \
+            --namespace ingress-nginx \
+            --create-namespace \
+            --wait
+      
+      - name: Get LoadBalancer IP
+        run: |
+          kubectl get svc grp1-ingress-ingress-nginx-controller -n ingress-nginx
+          echo "✅ Ingress NGINX installed!"
+
+- name: Update Frontend ConfigMap with LB IP
+  run: |
+    LB_IP=$(kubectl get svc grp1-ingress-ingress-nginx-controller -n ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+    
+    kubectl create configmap frontend-config -n app \
+      --from-literal=VITE_API_BASE_URL="http://$LB_IP.nip.io/app-api" \
+      --dry-run=client -o yaml | kubectl apply -f -
+    
+    echo "✅ Frontend ConfigMap updated with IP: $LB_IP"
