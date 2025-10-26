@@ -138,6 +138,13 @@ jobs:
           kubectl apply -f k8s/backend/ -n app
           echo "✅ Backend resources applied!"
       
+      - name: Apply Ingress Resources
+        run: |
+          echo "Applying Ingress resources..."
+          kubectl apply -f k8s/frontend/ingress.yaml -n app
+          kubectl apply -f k8s/backend/ingress.yaml -n app
+          echo "✅ Ingress resources applied!"
+      
       - name: Wait for Deployments to be ready
         run: |
           echo "Waiting for deployments to be ready..."
