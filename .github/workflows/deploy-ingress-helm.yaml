@@ -35,7 +35,11 @@ jobs:
         continue-on-error: true
         run: |
           # Remove existing IngressClass that was not managed by Helm
-          kubectl delete ingressclass nginx --ignore-not-found=true
+          echo "Checking for existing IngressClass..."
+          kubectl get ingressclass nginx -o yaml || echo "No IngressClass found"
+          kubectl delete ingressclass nginx --ignore-not-found=true || true
+          kubectl delete ingressclass -l app.kubernetes.io/managed-by!=Helm --all-namespaces --ignore-not-found=true || true
+          sleep 2
           echo "✅ Cleared existing IngressClass"
       
       - name: Install Ingress NGINX
@@ -54,7 +58,8 @@ jobs:
             helm install grp1-ingress ingress-nginx/ingress-nginx \
               --namespace ingress-nginx \
               --create-namespace \
-              --wait
+              --wait \
+              --set controller.ingressClassResource.controllerValue="k8s.io/ingress-nginx"
           fi
       
       - name: Wait for LoadBalancer IP
