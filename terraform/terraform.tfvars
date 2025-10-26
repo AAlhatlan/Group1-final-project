@@ -3,7 +3,7 @@ location            = "eastus2"
 resource_group_name = "rg-group1-eastus2"
 
 aks_node_count = 2
-aks_vm_size    = "Standard_D4s_v3"
+aks_vm_size    = "Standard_B4ms"
 aks_min_count  = 2
 aks_max_count  = 5
 

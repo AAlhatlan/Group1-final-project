@@ -31,7 +31,7 @@ variable "aks_node_count" {
 variable "aks_vm_size" {
   description = "VM size for AKS nodes"
   type        = string
-  default     = "Standard_D4s_v3"
+  default     = "Standard_B4ms"
 }
 
 variable "aks_min_count" {
