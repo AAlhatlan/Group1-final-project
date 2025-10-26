@@ -34,13 +34,13 @@ jobs:
         run: |
           kubectl get svc grp1-ingress-ingress-nginx-controller -n ingress-nginx
           echo "✅ Ingress NGINX installed!"
-
-- name: Update Frontend ConfigMap with LB IP
-  run: |
-    LB_IP=$(kubectl get svc grp1-ingress-ingress-nginx-controller -n ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-    
-    kubectl create configmap frontend-config -n app \
-      --from-literal=VITE_API_BASE_URL="http://$LB_IP.nip.io/app-api" \
-      --dry-run=client -o yaml | kubectl apply -f -
-    
-    echo "✅ Frontend ConfigMap updated with IP: $LB_IP"
+      
+      - name: Update Frontend ConfigMap with LB IP
+        run: |
+          LB_IP=$(kubectl get svc grp1-ingress-ingress-nginx-controller -n ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          
+          kubectl create configmap frontend-config -n app \
+            --from-literal=VITE_API_BASE_URL="http://$LB_IP.nip.io/app-api" \
+            --dry-run=client -o yaml | kubectl apply -f -
+          
+          echo "✅ Frontend ConfigMap updated with IP: $LB_IP"
