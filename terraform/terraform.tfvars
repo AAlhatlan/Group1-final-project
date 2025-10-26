@@ -1,6 +1,6 @@
 prefix              = "grp1"
-location            = "eastus2"
-resource_group_name = "rg-group1-eastus2"
+location            = "indonesiacentral"
+resource_group_name = "rg-group1-indonesiacentral"
 
 aks_node_count = 2
 aks_vm_size    = "Standard_B4ms"
