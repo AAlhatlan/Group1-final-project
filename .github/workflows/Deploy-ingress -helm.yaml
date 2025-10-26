@@ -25,29 +25,40 @@ jobs:
           cluster-name: ${{ vars.AKS_CLUSTER_NAME }}
       
       - name: Install Helm
-        uses: azure/setup-helm@v3
-        with:
-          version: 'latest'
+        run: |
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+          helm version
       
       - name: Install Ingress NGINX
         run: |
           helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
           helm repo update
-          helm install grp1-ingress ingress-nginx/ingress-nginx \
-            --namespace ingress-nginx \
-            --create-namespace \
-            --wait
+          
+          # Check if ingress is already installed
+          if helm list -n ingress-nginx | grep -q grp1-ingress; then
+            echo "Ingress NGINX already installed, upgrading..."
+            helm upgrade grp1-ingress ingress-nginx/ingress-nginx \
+              --namespace ingress-nginx \
+              --wait
+          else
+            echo "Installing Ingress NGINX..."
+            helm install grp1-ingress ingress-nginx/ingress-nginx \
+              --namespace ingress-nginx \
+              --create-namespace \
+              --wait
+          fi
       
       - name: Wait for LoadBalancer IP
+        id: lb_ip
         run: |
           echo "Waiting for LoadBalancer IP..."
           timeout=300
           elapsed=0
           while [ $elapsed -lt $timeout ]; do
             LB_IP=$(kubectl get svc grp1-ingress-ingress-nginx-controller -n ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
-            if [ -n "$LB_IP" ] && [ "$LB_IP" != "null" ]; then
+            if [ -n "$LB_IP" ] && [ "$LB_IP" != "null" ] && [ "$LB_IP" != "None" ]; then
               echo "LoadBalancer IP obtained: $LB_IP"
-              echo "LB_IP=$LB_IP" >> $GITHUB_ENV
+              echo "ip=$LB_IP" >> $GITHUB_OUTPUT
               exit 0
             fi
             echo "Waiting for IP... ($elapsed seconds)"
@@ -60,7 +71,7 @@ jobs:
       - name: Display LoadBalancer Info
         run: |
           kubectl get svc grp1-ingress-ingress-nginx-controller -n ingress-nginx
-          echo "✅ Ingress NGINX installed with IP: $LB_IP"
+          echo "✅ Ingress NGINX installed with IP: ${{ steps.lb_ip.outputs.ip }}"
       
       - name: Ensure app namespace exists
         run: |
@@ -73,11 +84,14 @@ jobs:
       
       - name: Update Frontend ConfigMap with LB IP
         run: |
-          if [ -z "$LB_IP" ]; then
+          LB_IP="${{ steps.lb_ip.outputs.ip }}"
+          
+          if [ -z "$LB_IP" ] || [ "$LB_IP" == "null" ]; then
             echo "❌ LoadBalancer IP is not available"
             exit 1
           fi
           
+          echo "Updating ConfigMap with LoadBalancer IP: $LB_IP"
           kubectl create configmap frontend-config -n app \
             --from-literal=VITE_API_BASE_URL="http://$LB_IP.nip.io/app-api" \
             --dry-run=client -o yaml | kubectl apply -f -
