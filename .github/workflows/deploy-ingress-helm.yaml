@@ -31,6 +31,13 @@ jobs:
           curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
           helm version
       
+      - name: Cleanup existing IngressClass
+        continue-on-error: true
+        run: |
+          # Remove existing IngressClass that was not managed by Helm
+          kubectl delete ingressclass nginx --ignore-not-found=true
+          echo "✅ Cleared existing IngressClass"
+      
       - name: Install Ingress NGINX
         run: |
           helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
