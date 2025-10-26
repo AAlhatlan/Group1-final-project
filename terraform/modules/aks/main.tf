@@ -48,6 +48,6 @@ resource "azurerm_kubernetes_cluster_node_pool" "userpool" {
   min_count             = var.userpool_min_count
   max_count             = var.userpool_max_count
   mode                  = "User"
+  temporary_name_for_rotation = var.userpool_temp_node_pool_name
 }
-
 

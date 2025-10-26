@@ -36,6 +36,7 @@ module "aks" {
   max_count           = var.aks_max_count
   subnet_id           = module.networking.aks_subnet_id
   temp_node_pool_name = "${local.node_pool_temp_name}tp"
+  userpool_temp_node_pool_name = "${local.node_pool_temp_name}up"
 }
 
 module "sql" {

@@ -47,6 +47,11 @@ variable "temp_node_pool_name" {
   type        = string
 }
 
+variable "userpool_temp_node_pool_name" {
+  description = "Temporary name used when rotating the user node pool"
+  type        = string
+}
+
 variable "service_cidr" {
   description = "Kubernetes service CIDR"
   type        = string
