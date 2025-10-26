@@ -47,3 +47,34 @@ jobs:
 
           docker push ${{ env.FE_IMAGE }}:${{ steps.version.outputs.frontend }}
           docker push ${{ env.FE_IMAGE }}:latest
+
+  deploy_frontend:
+    name: Deploy Frontend to AKS
+    runs-on: ubuntu-latest
+    needs: build_frontend
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Set AKS Context
+        uses: azure/aks-set-context@v3
+        with:
+          resource-group: ${{ vars.AZURE_RESOURCE_GROUP }}
+          cluster-name: ${{ vars.AKS_CLUSTER_NAME }}
+
+      - name: Deploy frontend manifests
+        run: |
+          kubectl apply -f k8s/frontend/ -n app
+          kubectl rollout status deployment/frontend-deployment -n app --timeout=180s
+
+      - name: Summarize deployment
+        run: |
+          echo "Frontend deployment refreshed with latest image." >> "$GITHUB_STEP_SUMMARY"

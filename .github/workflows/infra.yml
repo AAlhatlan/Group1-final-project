@@ -67,7 +67,7 @@ jobs:
     needs: terraform_apply
     env:
       KUBE_CONFIG_DATA: ${{ needs.terraform_apply.outputs.kube_config_data }}
-      K8S_NAMESPACE: grp1-app
+      K8S_NAMESPACE: app
     steps:
       - name: Checkout
         uses: actions/checkout@v4

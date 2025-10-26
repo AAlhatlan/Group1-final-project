@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: grp1-app
+  name: app
   labels:
-    name: grp1-app
+    name: app
     environment: production
