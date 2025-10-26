@@ -119,3 +119,18 @@ jobs:
             --dry-run=client -o yaml | kubectl apply -f -
           
           echo "✅ Frontend ConfigMap updated with IP: $LB_IP"
+      
+      - name: Verify Ingress Configuration
+        run: |
+          echo "=== Checking Ingress Resources in 'app' namespace ==="
+          echo ""
+          echo "📋 Ingress List:"
+          kubectl get ingress -n app
+          echo ""
+          echo "📋 Ingress Details:"
+          kubectl get ingress -n app -o yaml
+          echo ""
+          echo "=== Checking IngressClass ==="
+          kubectl get ingressclass
+          echo ""
+          echo "✅ Ingress verification complete!"
