@@ -7,3 +7,5 @@ data:
   SPRING_PROFILES_ACTIVE: "default"
   SPRING_WEB_CORS_ALLOWED_ORIGINS: "http://48.193.24.54.nip.io"
   SERVER_PORT: "8080"
+  DB_URL: "jdbc:sqlserver://grp1-sqlsrv.database.windows.net:1433;database=grp1-sqldb;encrypt=true;trustServerCertificate=false;loginTimeout=30;"
+  DB_DRIVER: "com.microsoft.sqlserver.jdbc.SQLServerDriver"

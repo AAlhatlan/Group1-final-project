@@ -55,4 +55,6 @@ module "keyvault" {
   location                = local.effective_location
   resource_group_name     = azurerm_resource_group.main.name
   aks_managed_identity_id = module.aks.aks_identity_id
+  sql_admin_username      = var.sql_admin
+  sql_admin_password      = var.sql_password
 }

@@ -21,8 +21,8 @@ spec:
           env:
             - name: DB_URL
               valueFrom:
-                secretKeyRef:
-                  name: backend-secret
+                configMapKeyRef:
+                  name: backend-config
                   key: DB_URL
             - name: DB_USERNAME
               valueFrom:
@@ -36,8 +36,8 @@ spec:
                   key: DB_PASSWORD
             - name: DB_DRIVER
               valueFrom:
-                secretKeyRef:
-                  name: backend-secret
+                configMapKeyRef:
+                  name: backend-config
                   key: DB_DRIVER
             - name: SPRING_PROFILES_ACTIVE
               valueFrom:
@@ -54,3 +54,14 @@ spec:
                 configMapKeyRef:
                   name: backend-config
                   key: SERVER_PORT
+          volumeMounts:
+            - name: backend-secrets
+              mountPath: /mnt/secrets-store
+              readOnly: true
+      volumes:
+        - name: backend-secrets
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: backend-sql-secrets
