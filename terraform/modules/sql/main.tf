@@ -21,6 +21,6 @@ resource "azurerm_mssql_database" "main" {
 resource "azurerm_mssql_virtual_network_rule" "aks_allow" {
   name                                 = "${var.prefix}-aks-sql-rule"
   server_id                            = azurerm_mssql_server.main.id
-  virtual_network_subnet_id            = var.aks_subnet_id
+  subnet_id                            = var.aks_subnet_id
   ignore_missing_vnet_service_endpoint = false
 }
