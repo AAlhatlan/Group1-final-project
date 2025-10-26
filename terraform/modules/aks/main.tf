@@ -40,7 +40,6 @@ resource "azurerm_kubernetes_cluster" "aks" {
   }
 }
 
-/* Temporarily disable the extra user node pool deployment.
 resource "azurerm_kubernetes_cluster_node_pool" "userpool" {
   name                  = "userpool"
   kubernetes_cluster_id = azurerm_kubernetes_cluster.aks.id
@@ -50,5 +49,5 @@ resource "azurerm_kubernetes_cluster_node_pool" "userpool" {
   max_count             = var.userpool_max_count
   mode                  = "User"
 }
-*/
+
 
