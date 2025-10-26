@@ -1,6 +1,10 @@
 name: Deploy Ingress NGINX with Helm
 
 on:
+  push:
+    branches:
+      - groupTest
+      - main
   workflow_dispatch:
 
 jobs:
