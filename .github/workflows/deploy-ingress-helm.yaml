@@ -51,17 +51,6 @@ jobs:
           sleep 3
           echo "✅ Cleaned up old Ingress installation"
       
-      - name: Cleanup existing IngressClass
-        continue-on-error: true
-        run: |
-          # Remove existing IngressClass that was not managed by Helm
-          echo "Checking for existing IngressClass..."
-          kubectl get ingressclass nginx -o yaml || echo "No IngressClass found"
-          kubectl delete ingressclass nginx --ignore-not-found=true || true
-          kubectl delete ingressclass -l app.kubernetes.io/managed-by!=Helm --all-namespaces --ignore-not-found=true || true
-          sleep 2
-          echo "✅ Cleared existing IngressClass"
-      
       - name: Install Ingress NGINX
         run: |
           helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
@@ -76,18 +65,15 @@ jobs:
               --reuse-values
           else
             echo "Installing Ingress NGINX..."
-            # First, try to delete the existing IngressClass with force
-            kubectl patch ingressclass nginx -p '{"metadata":{"finalizers":[]}}' --type=merge || true
-            kubectl delete ingressclass nginx --force --grace-period=0 || true
-            sleep 3
             
-              # Install with custom IngressClass configuration
-              helm install grp1-ingress ingress-nginx/ingress-nginx \
-                --namespace ingress-nginx-l \
-                --create-namespace \
-                --wait \
-                --set controller.ingressClassResource.controllerValue="k8s.io/ingress-nginx" \
-                --set controller.ingressClassByName=true
+            # Install with custom CRM configuration  
+            helm install grp1-ingress ingress-nginx/ingress-nginx \
+              --namespace ingress-nginx-l \
+              --create-namespace \
+              --wait \
+              --set controller.ingressClassResource.controllerValue="k8s.io/ingress-nginx" \
+              --set controller.ingressClassByName=true \
+              --set controller.ingressClassResource.name=nginx
           fi
       
       - name: Wait for LoadBalancer IP
@@ -139,6 +125,13 @@ jobs:
             --dry-run=client -o yaml | kubectl apply -f -
           
           echo "✅ Frontend ConfigMap updated with IP: $LB_IP"
+      
+      - name: Apply Ingress Resources
+        run: |
+          echo "Applying Ingress resources to app namespace..."
+          kubectl apply -f k8s/frontend/ingress.yaml -n app
+          kubectl apply -f k8s/backend/ingress.yaml -n app
+          echo "✅ Ingress resources applied successfully!"
       
       - name: Verify Ingress Configuration
         run: |
