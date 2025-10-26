@@ -28,3 +28,8 @@ variable "subnet_id" {
   description = "Subnet ID for Private Endpoint"
   type        = string
 }
+
+variable "vnet_id" {
+  description = "VNet ID for Private DNS link"
+  type        = string
+}

@@ -17,6 +17,19 @@ resource "azurerm_mssql_database" "main" {
   storage_account_type = "Local"
 }
 
+# Private DNS zone for SQL private endpoint
+resource "azurerm_private_dns_zone" "sql" {
+  name                = "privatelink.database.windows.net"
+  resource_group_name = var.resource_group_name
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "sql" {
+  name                  = "${var.prefix}-sql-dns-link"
+  resource_group_name   = var.resource_group_name
+  private_dns_zone_name = azurerm_private_dns_zone.sql.name
+  virtual_network_id    = var.vnet_id
+}
+
 # Private Endpoint للـ SQL
 resource "azurerm_private_endpoint" "sql" {
   name                = "${var.prefix}-sql-pe"
@@ -29,5 +42,10 @@ resource "azurerm_private_endpoint" "sql" {
     private_connection_resource_id = azurerm_mssql_server.main.id
     subresource_names              = ["sqlServer"]
     is_manual_connection           = false
+  }
+
+  private_dns_zone_group {
+    name                 = "${var.prefix}-sql-dns-group"
+    private_dns_zone_ids = [azurerm_private_dns_zone.sql.id]
   }
 }

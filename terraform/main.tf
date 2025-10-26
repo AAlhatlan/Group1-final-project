@@ -46,7 +46,8 @@ module "sql" {
   resource_group_name = azurerm_resource_group.main.name
   sql_admin_username  = var.sql_admin
   sql_admin_password  = var.sql_password
-  subnet_id           = module.networking.aks_subnet_id
+  subnet_id           = module.networking.sql_subnet_id
+  vnet_id             = module.networking.vnet_id
 }
 
 module "keyvault" {
