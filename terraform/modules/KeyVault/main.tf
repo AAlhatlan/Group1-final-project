@@ -1,8 +1,12 @@
 data "azurerm_client_config" "current" {}
 
+resource "random_id" "kv_suffix" {
+  byte_length = 2
+}
+
 # إنشاء Key Vault
 resource "azurerm_key_vault" "main" {
-  name                     = lower("${var.prefix}-kv")
+  name                     = lower("${var.prefix}${random_id.kv_suffix.hex}-kv")
   location                 = var.location
   resource_group_name      = var.resource_group_name
   tenant_id                = data.azurerm_client_config.current.tenant_id
