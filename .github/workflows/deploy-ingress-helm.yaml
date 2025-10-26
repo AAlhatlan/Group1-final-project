@@ -46,6 +46,9 @@ jobs:
           kubectl delete clusterrole grp1-ingress-ingress-nginx --ignore-not-found=true || true
           kubectl delete clusterrolebinding grp1-ingress-ingress-nginx --ignore-not-found=true || true
           
+          # Delete old validatingwebhookconfiguration
+          kubectl delete validatingwebhookconfiguration ingress-nginx-admission --ignore-not-found=true || true
+          
           # Delete old namespace
           kubectl delete namespace ingress-nginx --ignore-not-found=true || true
           sleep 3
