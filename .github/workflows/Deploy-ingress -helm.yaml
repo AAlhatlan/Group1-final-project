@@ -8,6 +8,9 @@ jobs:
     name: Deploy Ingress NGINX
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
       - name: Azure Login
         uses: azure/login@v1
         with:
