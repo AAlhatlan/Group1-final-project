@@ -44,7 +44,7 @@ jobs:
       - name: Terraform Apply
         run: $TF_BIN apply -auto-approve -lock=false -input=false
 
-      # 🟢 Export AKS kubeconfig dynamically
+      #  Export AKS kubeconfig dynamically
       - name: Export AKS kubeconfig
         id: export_kubeconfig
         shell: bash
@@ -59,7 +59,7 @@ jobs:
           echo "Encoding kubeconfig to base64..."
           KUBE64=$(base64 -w0 kubeconfig)
           echo "::set-output name=kube_config_data::$KUBE64"
-          echo "✅ Kubeconfig exported successfully."
+          echo " Kubeconfig exported successfully."
 
   k8s_apply:
     name: Kubernetes Apply
@@ -84,7 +84,7 @@ jobs:
             cat <<< "$files"
           else
             echo "found=false" >> "$GITHUB_OUTPUT"
-            echo "⚠️ No manifests found, skipping."
+            echo " No manifests found, skipping."
           fi
 
       - name: Setup kubectl
@@ -93,14 +93,14 @@ jobs:
         with:
           version: 'v1.30.0'
 
-      # 🟢 Prepare kubeconfig from dynamic Terraform output
+      #  Prepare kubeconfig from dynamic Terraform output
       - name: Prepare kubeconfig
         if: steps.detect.outputs.found == 'true'
         run: |
           mkdir -p ~/.kube
           echo "${KUBE_CONFIG_DATA}" | base64 -d > ~/.kube/config
           chmod 600 ~/.kube/config
-          echo "✅ Kubeconfig loaded successfully"
+          echo " Kubeconfig loaded successfully"
           kubectl cluster-info
 
       - name: Apply Kubernetes manifests
@@ -122,7 +122,7 @@ jobs:
           fi
 
           kubectl apply -R -f k8s
-          echo "✅ All manifests applied successfully."
+          echo " All manifests applied successfully."
 
       - name: Verify Deployment Rollouts
         if: steps.detect.outputs.found == 'true'
