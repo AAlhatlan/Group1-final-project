@@ -52,14 +52,22 @@ jobs:
             echo "Ingress NGINX already installed, upgrading..."
             helm upgrade grp1-ingress ingress-nginx/ingress-nginx \
               --namespace ingress-nginx \
-              --wait
+              --wait \
+              --reuse-values
           else
             echo "Installing Ingress NGINX..."
+            # First, try to delete the existing IngressClass with force
+            kubectl patch ingressclass nginx -p '{"metadata":{"finalizers":[]}}' --type=merge || true
+            kubectl delete ingressclass nginx --force --grace-period=0 || true
+            sleep 3
+            
+            # Install with custom IngressClass configuration
             helm install grp1-ingress ingress-nginx/ingress-nginx \
               --namespace ingress-nginx \
               --create-namespace \
               --wait \
-              --set controller.ingressClassResource.controllerValue="k8s.io/ingress-nginx"
+              --set controller.ingressClassResource.controllerValue="k8s.io/ingress-nginx" \
+              --set controller.ingressClassByName=true
           fi
       
       - name: Wait for LoadBalancer IP
