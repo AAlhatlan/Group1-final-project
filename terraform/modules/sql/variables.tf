@@ -24,12 +24,7 @@ variable "sql_admin_password" {
   sensitive   = true
 }
 
-variable "subnet_id" {
-  description = "Subnet ID for Private Endpoint"
-  type        = string
-}
-
-variable "vnet_id" {
-  description = "VNet ID for Private DNS link"
+variable "aks_subnet_id" {
+  description = "AKS subnet ID allowed to access SQL via service endpoint"
   type        = string
 }
