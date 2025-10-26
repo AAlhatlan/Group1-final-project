@@ -7,7 +7,7 @@ variable "prefix" {
 variable "location" {
   description = "Azure location"
   type        = string
-  default     = "eastus"
+  default     = "eastus2"
 }
 
 variable "resource_group_name" {
@@ -31,7 +31,7 @@ variable "aks_node_count" {
 variable "aks_vm_size" {
   description = "VM size for AKS nodes"
   type        = string
-  default     = "Standard_DS3_v2"
+  default     = "Standard_D4s_v3"
 }
 
 variable "aks_min_count" {
