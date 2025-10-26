@@ -15,6 +15,8 @@ jobs:
     env:
       TF_VAR_sql_password: ${{ secrets.SQL_ADMIN_PASSWORD }}
       TF_VAR_location: ${{ secrets.AZURE_LOCATION || vars.AZURE_LOCATION || 'austriaeast' }}
+    outputs:
+      kube_config_data: ${{ steps.export_kubeconfig.outputs.kube_config_data }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,54 +34,57 @@ jobs:
 
       - name: Show Terraform version and path
         id: tfver
-        shell: bash
         run: |
-          set -euo pipefail
           terraform version
           echo "TF_BIN=$(command -v terraform)" >> "$GITHUB_ENV"
-          echo "bin=$(command -v terraform)" >> "$GITHUB_OUTPUT"
 
       - name: Terraform Init (with backend)
         run: $TF_BIN init -input=false -upgrade
 
-      - name: Cleanup legacy ACR state (best-effort)
-        shell: bash
-        run: |
-          set -euo pipefail
-          $TF_BIN state list | grep -q '^azurerm_role_assignment\.acr_pull$' && $TF_BIN state rm azurerm_role_assignment.acr_pull || true
-          if $TF_BIN state list | grep -q '^module\.acr\.'; then
-            $TF_BIN state list | awk '/^module\.acr\./{print $0}' | xargs -r -n1 $TF_BIN state rm || true
-          fi
-
       - name: Terraform Apply
         run: $TF_BIN apply -auto-approve -lock=false -input=false
+
+      # 🟢 Export AKS kubeconfig dynamically
+      - name: Export AKS kubeconfig
+        id: export_kubeconfig
+        shell: bash
+        run: |
+          echo "Fetching AKS credentials dynamically..."
+          az aks get-credentials \
+            --resource-group rg-group1-austriaeast \
+            --name grp1-aks \
+            --file kubeconfig \
+            --overwrite-existing
+
+          echo "Encoding kubeconfig to base64..."
+          KUBE64=$(base64 -w0 kubeconfig)
+          echo "::set-output name=kube_config_data::$KUBE64"
+          echo "✅ Kubeconfig exported successfully."
 
   k8s_apply:
     name: Kubernetes Apply
     runs-on: ubuntu-latest
     needs: terraform_apply
     env:
-      KUBE_CONFIG: ${{ secrets.KUBE_CONFIG || vars.KUBE_CONFIG || '' }}
-      KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA || vars.KUBE_CONFIG_DATA || '' }}
-      K8S_NAMESPACE: ${{ secrets.K8S_NAMESPACE || vars.K8S_NAMESPACE || 'grp1-app' }}
+      KUBE_CONFIG_DATA: ${{ needs.terraform_apply.outputs.kube_config_data }}
+      K8S_NAMESPACE: grp1-app
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Detect k8s manifests
         id: detect
-        shell: bash
         run: |
           set -euo pipefail
           mkdir -p k8s || true
           files=$(find k8s -type f \( -name '*.yml' -o -name '*.yaml' \) -size +0c | sort || true)
           if [ -n "$files" ]; then
             echo "found=true" >> "$GITHUB_OUTPUT"
-            printf '%s\n' "$files" > manifest-list.txt
-            echo "Manifests to apply:"; cat manifest-list.txt
+            echo "Manifests found:"
+            cat <<< "$files"
           else
             echo "found=false" >> "$GITHUB_OUTPUT"
-            echo "No non-empty k8s manifests found; skipping apply."
+            echo "⚠️ No manifests found, skipping."
           fi
 
       - name: Setup kubectl
@@ -88,97 +93,40 @@ jobs:
         with:
           version: 'v1.30.0'
 
+      # 🟢 Prepare kubeconfig from dynamic Terraform output
       - name: Prepare kubeconfig
         if: steps.detect.outputs.found == 'true'
-        id: kubeconfig
-        shell: bash
-        env:
-          RAW_KUBECONFIG: ${{ env.KUBE_CONFIG }}
-          BASE64_KUBECONFIG: ${{ env.KUBE_CONFIG_DATA }}
         run: |
-          set -euo pipefail
           mkdir -p ~/.kube
-
-          if [ -z "$RAW_KUBECONFIG" ] && [ -z "$BASE64_KUBECONFIG" ]; then
-            echo "configured=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          tmp=$(mktemp)
-          decode_err=$(mktemp)
-          source_label=""
-          cleanup() { rm -f "$tmp" "$decode_err"; }
-          trap cleanup EXIT
-
-          try_raw_fallback() {
-            printf "%s" "$1" > "$tmp"
-            source_label=$2
-          }
-
-          try_base64_or_raw() {
-            local value=$1 label=$2
-            if printf "%s" "$value" | base64 -d > "$tmp" 2>"$decode_err"; then
-              source_label="$label (base64)"
-              return 0
-            fi
-            echo "Value from $label failed base64 decode; treating as plaintext." >&2
-            try_raw_fallback "$value" "$label"
-          }
-
-          if [ -n "$BASE64_KUBECONFIG" ]; then
-            try_base64_or_raw "$BASE64_KUBECONFIG" "KUBE_CONFIG_DATA"
-          elif [ -n "$RAW_KUBECONFIG" ]; then
-            if printf "%s" "$RAW_KUBECONFIG" | base64 -d > "$tmp" 2>/dev/null; then
-              source_label="KUBE_CONFIG (base64)"
-            else
-              printf "%s" "$RAW_KUBECONFIG" > "$tmp"
-              source_label="KUBE_CONFIG"
-            fi
-          fi
-
-          mv "$tmp" ~/.kube/config
+          echo "${KUBE_CONFIG_DATA}" | base64 -d > ~/.kube/config
           chmod 600 ~/.kube/config
+          echo "✅ Kubeconfig loaded successfully"
+          kubectl cluster-info
 
-          if kubectl config view --minify >/dev/null 2>&1; then
-            echo "configured=true" >> "$GITHUB_OUTPUT"
-            echo "source=$source_label" >> "$GITHUB_OUTPUT"
-          else
-            echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Provided kubeconfig from $source_label is invalid (missing apiVersion/kind); skipping kubectl steps."
-            sed 's/^/INVALID: /' ~/.kube/config >&2 || true
-            rm -f ~/.kube/config
-          fi
-
-      - name: Skip — no kubeconfig provided
-        if: steps.detect.outputs.found == 'true' && steps.kubeconfig.outputs.configured != 'true'
-        run: echo "No KUBE_CONFIG or KUBE_CONFIG_DATA provided; skipping kubectl apply." >> "$GITHUB_STEP_SUMMARY"
-
-      - name: kubectl apply
-        if: steps.detect.outputs.found == 'true' && steps.kubeconfig.outputs.configured == 'true'
-        shell: bash
+      - name: Apply Kubernetes manifests
+        if: steps.detect.outputs.found == 'true'
         run: |
           set -euo pipefail
-          if [ -f k8s/namespace.yml ] || [ -f k8s/namespace.yaml ]; then
-            kubectl apply -f k8s/namespace.yml || kubectl apply -f k8s/namespace.yaml || true
+          echo "Applying manifests to cluster..."
+
+          if [ -f k8s/namespace.yaml ]; then
+            kubectl apply -f k8s/namespace.yaml
+          elif [ -f k8s/namespace.yml ]; then
+            kubectl apply -f k8s/namespace.yml
           fi
 
-          # Apply ingress controller first (if present) and wait for webhook readiness
           if [ -f k8s/ingress-controller/ingress-nginx.yaml ]; then
-            echo "Applying ingress-nginx controller manifest first..."
+            echo "Deploying ingress-nginx controller..."
             kubectl apply -f k8s/ingress-controller/ingress-nginx.yaml
-            echo "Waiting for ingress-nginx controller to be ready..."
             kubectl -n ingress-nginx rollout status deploy/ingress-nginx-controller --timeout=240s
           fi
 
           kubectl apply -R -f k8s
-          printf "Applied manifests to namespace '%s'\n" "$K8S_NAMESPACE" >> "$GITHUB_STEP_SUMMARY"
+          echo "✅ All manifests applied successfully."
 
-      - name: Check rollout (best-effort)
-        if: steps.detect.outputs.found == 'true' && steps.kubeconfig.outputs.configured == 'true'
+      - name: Verify Deployment Rollouts
+        if: steps.detect.outputs.found == 'true'
         continue-on-error: true
-        shell: bash
         run: |
-          set -euo pipefail
-          echo "Checking deployment rollouts in namespace: $K8S_NAMESPACE"
           kubectl -n "$K8S_NAMESPACE" get deploy || exit 0
           kubectl -n "$K8S_NAMESPACE" rollout status deploy --timeout=120s
