@@ -31,6 +31,26 @@ jobs:
           curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
           helm version
       
+      - name: Cleanup old Ingress installation
+        continue-on-error: true
+        run: |
+          echo "Checking for existing Ingress installation in old namespace..."
+          if helm list -n ingress-nginx | grep -q grp1-ingress; then
+            echo "Uninstalling old Ingress from ingress-nginx namespace..."
+            helm uninstall grp1-ingress -n ingress-nginx || true
+            sleep 5
+          fi
+          
+          # Clean up orphaned cluster-level resources
+          kubectl delete ingressclass nginx --ignore-not-found=true || true
+          kubectl delete clusterrole grp1-ingress-ingress-nginx --ignore-not-found=true || true
+          kubectl delete clusterrolebinding grp1-ingress-ingress-nginx --ignore-not-found=true || true
+          
+          # Delete old namespace
+          kubectl delete namespace ingress-nginx --ignore-not-found=true || true
+          sleep 3
+          echo "✅ Cleaned up old Ingress installation"
+      
       - name: Cleanup existing IngressClass
         continue-on-error: true
         run: |
