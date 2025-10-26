@@ -22,7 +22,7 @@ variable "node_count" {
 variable "vm_size" {
   description = "VM size for nodes"
   type        = string
-  default     = "Standard_E2bds_v5"
+  default     = "Standard_DS3_v2"
 }
 
 variable "min_count" {

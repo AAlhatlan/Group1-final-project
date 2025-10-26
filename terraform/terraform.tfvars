@@ -1,9 +1,9 @@
 prefix              = "grp1"
-location            = "indonesiacentral"
-resource_group_name = "rg-grp1-indonesiacentral"
+location            = "eastus"
+resource_group_name = "rg-group1-eastus"
 
 aks_node_count = 2
-aks_vm_size    = "Standard_E2bds_v5"
+aks_vm_size    = "Standard_DS3_v2"
 aks_min_count  = 2
 aks_max_count  = 5
 
