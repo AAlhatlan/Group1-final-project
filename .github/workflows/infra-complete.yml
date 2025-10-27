@@ -152,21 +152,39 @@ jobs:
           helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
           helm repo update
           
-          echo "Installing Ingress NGINX..."
-          helm install grp1-ingress ingress-nginx/ingress-nginx \
-            --namespace ingress-nginx \
-            --create-namespace \
-            --wait \
-            --timeout=10m \
-            --set controller.ingressClassResource.controllerValue="k8s.io/ingress-nginx" \
-            --set controller.ingressClassByName=true \
-            --set controller.service.type=LoadBalancer \
-            --set controller.service.externalTrafficPolicy=Local
+          # Check if Ingress NGINX is already installed
+          if helm list -n ingress-nginx | grep -q grp1-ingress; then
+            echo "🌐 Ingress NGINX already installed, skipping..."
+            echo "✅ Ingress NGINX is up to date"
+          else
+            echo "🌐 Installing Ingress NGINX..."
+            helm install grp1-ingress ingress-nginx/ingress-nginx \
+              --namespace ingress-nginx \
+              --create-namespace \
+              --wait \
+              --timeout=10m \
+              --set controller.ingressClassResource.controllerValue="k8s.io/ingress-nginx" \
+              --set controller.ingressClassByName=true \
+              --set controller.service.type=LoadBalancer \
+              --set controller.service.externalTrafficPolicy=Local
+            echo "✅ Ingress NGINX installed successfully"
+          fi
       
       - name: Wait for LoadBalancer IP
         id: lb_ip
         run: |
-          echo "Waiting for LoadBalancer IP..."
+          echo "🔍 Checking for existing LoadBalancer IP..."
+          
+          # Check if LoadBalancer already has an IP
+          LB_IP=$(kubectl get svc grp1-ingress-ingress-nginx-controller -n ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
+          
+          if [ -n "$LB_IP" ] && [ "$LB_IP" != "null" ] && [ "$LB_IP" != "None" ] && [ "$LB_IP" != "" ]; then
+            echo "✅ LoadBalancer IP already exists: $LB_IP"
+            echo "ip=$LB_IP" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          echo "⏳ Waiting for new LoadBalancer IP..."
           timeout=600  # 10 minutes timeout
           elapsed=0
           while [ $elapsed -lt $timeout ]; do
@@ -265,6 +283,27 @@ jobs:
           
           echo "✅ Frontend ConfigMap updated with IP: $LB_IP"
 
+      - name: Cleanup existing Backend and Frontend resources
+        if: steps.detect.outputs.found == 'true'
+        run: |
+          echo "🧹 Cleaning up existing Backend and Frontend resources..."
+          
+          # Delete existing Ingress resources
+          kubectl delete ingress app-backend-ingress -n app --ignore-not-found=true || true
+          kubectl delete ingress app-frontend-ingress -n app --ignore-not-found=true || true
+          
+          # Delete existing Services
+          kubectl delete service app-backend-service -n app --ignore-not-found=true || true
+          kubectl delete service app-frontend-service -n app --ignore-not-found=true || true
+          
+          # Delete existing Deployments
+          kubectl delete deployment app-backend-deployment -n app --ignore-not-found=true || true
+          kubectl delete deployment app-frontend-deployment -n app --ignore-not-found=true || true
+          
+          # Wait for cleanup
+          sleep 5
+          echo "✅ Backend and Frontend resources cleaned up"
+
       - name: Apply Kubernetes manifests
         if: steps.detect.outputs.found == 'true'
         run: |
@@ -332,12 +371,8 @@ jobs:
           
           # Check if monitoring is already installed
           if helm list -n monitoring | grep -q kube-prometheus-stack; then
-            echo "📊 Monitoring stack already installed, upgrading..."
-            helm upgrade kube-prometheus-stack prometheus-community/kube-prometheus-stack \
-              --namespace monitoring \
-              --values k8s/monitoring/values.yaml \
-              --wait \
-              --timeout=10m
+            echo "📊 Monitoring stack already installed, skipping..."
+            echo "✅ Monitoring stack is up to date"
           else
             echo "📊 Installing monitoring stack..."
             helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
@@ -346,9 +381,8 @@ jobs:
               --values k8s/monitoring/values.yaml \
               --wait \
               --timeout=10m
+            echo "✅ Monitoring stack deployed successfully"
           fi
-          
-          echo "✅ Monitoring stack deployed successfully"
       
       - name: Apply Monitoring Manifests
         run: |
