@@ -2,7 +2,7 @@
 
 grafana:
   enabled: true
-  adminPassword: "admin123"  # غيرها!
+  adminPassword: "admin123"
   service:
     type: LoadBalancer
   
@@ -33,45 +33,51 @@ alertmanager:
   config:
     global:
       resolve_timeout: 5m
-      # Email configuration
-      smtp_smarthost: 'smtp.gmail.com:587'
-      smtp_from: 'lamanasser56@gmail.com'
-      smtp_auth_username: 'lamanasser56@gmail.com'
-      smtp_auth_password: 'your-app-password'
-      smtp_require_tls: true
     
     route:
+      receiver: 'slack-alerts'
       group_by: ['alertname', 'namespace', 'severity']
       group_wait: 10s
-      group_interval: 10s
-      repeat_interval: 12h
-      receiver: 'default'
+      group_interval: 5m
+      repeat_interval: 4h
       
       routes:
       - match:
           severity: critical
-        receiver: 'critical-alerts'
-        continue: true
+        receiver: 'slack-critical'
       - match:
           severity: warning
-        receiver: 'warning-alerts'
+        receiver: 'slack-warnings'
     
     receivers:
-    - name: 'default'
-      email_configs:
-      - to: 'team@example.com'
+    - name: 'slack-alerts'
+      slack_configs:
+      - api_url: 'https://hooks.slack.com/services/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'
+        channel: '#prometheus-monitoring'
+        username: 'Alertmanager'
+        icon_emoji: ':bell:'
+        title: 'Alert: {{ .GroupLabels.alertname }}'
+        text: 'Summary: {{ .CommonAnnotations.summary }}'
         send_resolved: true
     
-    - name: 'critical-alerts'
-      email_configs:
-      - to: 'oncall@example.com'
+    - name: 'slack-critical'
+      slack_configs:
+      - api_url: 'https://hooks.slack.com/services/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'
+        channel: '#prometheus-monitoring'
+        username: 'Alertmanager'
+        icon_emoji: ':rotating_light:'
+        color: 'danger'
+        title: 'CRITICAL Alert: {{ .GroupLabels.alertname }}'
+        text: 'Summary: {{ .CommonAnnotations.summary }}'
         send_resolved: true
-        headers:
-          Subject: '🚨 CRITICAL: {{ .GroupLabels.alertname }}'
     
-    - name: 'warning-alerts'
-      email_configs:
-      - to: 'team@example.com'
+    - name: 'slack-warnings'
+      slack_configs:
+      - api_url: 'https://hooks.slack.com/services/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'
+        channel: '#prometheus-monitoring'
+        username: 'Alertmanager'
+        icon_emoji: ':warning:'
+        color: 'warning'
+        title: 'WARNING Alert: {{ .GroupLabels.alertname }}'
+        text: 'Summary: {{ .CommonAnnotations.summary }}'
         send_resolved: true
-        headers:
-          Subject: '⚠️ WARNING: {{ .GroupLabels.alertname }}'
