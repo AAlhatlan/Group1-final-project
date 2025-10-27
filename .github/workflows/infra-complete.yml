@@ -94,37 +94,36 @@ jobs:
           helm version
       
 
-      - name: Install or Upgrade Ingress NGINX (Safe)
+      - name: Install/Upgrade Ingress NGINX
         run: |
-         set -e
-         echo "📦 Adding ingress-nginx Helm repo..."
-         helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
-         helm repo update
-
-         echo "🚀 Deploying Ingress NGINX (install or upgrade)..."
-         helm upgrade --install grp1-ingress ingress-nginx/ingress-nginx \
-           --namespace ingress-nginx \
-           --create-namespace \
-           --wait \
-           --timeout=10m \
-           --atomic \
-           --set controller.ingressClassByName=true \
-           --set controller.ingressClassResource.controllerValue="k8s.io/ingress-nginx" \
-           --set controller.service.type=LoadBalancer \
-           --set controller.service.externalTrafficPolicy=Local || echo "⚠️ Helm install may have timed out, continuing..."
-
-         echo "🔍 Checking ingress-nginx pods status..."
-         kubectl get pods -n ingress-nginx || true
-
-         echo "🔍 Checking ingress-nginx services..."
-         kubectl get svc -n ingress-nginx || true
-
-         echo "🔍 Checking any pending pods..."
-         kubectl get pods -A | grep Pending || true
-
-         echo "✅ Ingress NGINX deployment step finished (even if Helm wait timed out)"
-
-
+          helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+          helm repo update
+          
+          # Check if Ingress NGINX is already installed
+          if helm list -n ingress-nginx | grep -q grp1-ingress; then
+            echo "🌐 Ingress NGINX already installed, upgrading..."
+            helm upgrade grp1-ingress ingress-nginx/ingress-nginx \
+              --namespace ingress-nginx \
+              --wait \
+              --timeout=10m \
+              --set controller.ingressClassResource.controllerValue="k8s.io/ingress-nginx" \
+              --set controller.ingressClassByName=true \
+              --set controller.service.type=LoadBalancer \
+              --set controller.service.externalTrafficPolicy=Local
+            echo "✅ Ingress NGINX upgraded successfully"
+          else
+            echo "🌐 Installing Ingress NGINX..."
+            helm install grp1-ingress ingress-nginx/ingress-nginx \
+              --namespace ingress-nginx \
+              --create-namespace \
+              --wait \
+              --timeout=10m \
+              --set controller.ingressClassResource.controllerValue="k8s.io/ingress-nginx" \
+              --set controller.ingressClassByName=true \
+              --set controller.service.type=LoadBalancer \
+              --set controller.service.externalTrafficPolicy=Local
+            echo "✅ Ingress NGINX installed successfully"
+          fi
       
       - name: Wait for LoadBalancer IP
         id: lb_ip
