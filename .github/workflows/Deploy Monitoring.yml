@@ -2,9 +2,13 @@ name: Deploy Monitoring Stack
 
 on:
   push:
+    branches:
+      - groupTest
+      - main
     paths:
       - 'k8s/monitoring/**'
       - '.github/workflows/Deploy Monitoring.yml'
+  workflow_dispatch:
 
 permissions:
   id-token: write
