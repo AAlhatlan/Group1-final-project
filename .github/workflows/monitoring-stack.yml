@@ -35,8 +35,8 @@ jobs:
           helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
             --namespace monitoring \
             --create-namespace \
-            --wait \
-            --values k8s/monitoring/values.yaml
+            --values k8s/monitoring/values.yaml \
+            --wait
       
       - name: Apply Monitoring Manifests
         run: |
@@ -53,11 +53,3 @@ jobs:
           echo ""
           echo "=== Monitoring Pods ==="
           kubectl get pods -n monitoring
-- name: Deploy Monitoring
-  run: |
-    helm upgrade --install kube-prometheus-stack \
-      prometheus-community/kube-prometheus-stack \
-      --namespace monitoring \
-      --create-namespace \
-      --values k8s/monitoring/values.yaml \
-      --wait          
