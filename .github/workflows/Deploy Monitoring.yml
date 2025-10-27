@@ -1,0 +1,54 @@
+name: Deploy Monitoring Stack
+
+on:
+  push:
+    paths:
+      - 'k8s/monitoring/**'
+      - '.github/workflows/monitoring.yml'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-monitoring:
+    name: Deploy kube-prometheus-stack to AKS
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Get AKS credentials
+        run: az aks get-credentials --resource-group rg-capstone --name aks-capstone --admin --overwrite-existing
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: v3.12.3
+
+      - name: Deploy kube-prometheus-stack via Helm
+        run: |
+          kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm repo update
+          helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+            -n monitoring \
+            -f k8s/monitoring/helm-values/kube-prometheus-values.yaml \
+            --wait
+
+      - name: Apply monitoring manifests
+        run: kubectl apply -f k8s/monitoring/manifests/
+
+      - name: Verify Prometheus pods
+        run: |
+          kubectl get pods -n monitoring
+          kubectl rollout status deploy/kube-prometheus-stack-grafana -n monitoring --timeout=180s
