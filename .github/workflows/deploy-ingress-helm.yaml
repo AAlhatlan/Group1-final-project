@@ -5,6 +5,11 @@ on:
     branches:
       - groupTest
       - main
+    paths:
+      - 'k8s/ingress/**'
+      - 'k8s/frontend/**'
+      - 'k8s/backend/**'
+      - '.github/workflows/deploy-ingress-helm.yaml'
   workflow_dispatch:
 
 jobs:
