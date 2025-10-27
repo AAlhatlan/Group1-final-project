@@ -93,69 +93,24 @@ jobs:
           curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
           helm version
       
-      - name: Cleanup existing IngressClass
-        continue-on-error: true
-        run: |
-          # Remove existing IngressClass that was not managed by Helm
-          echo "Checking for existing IngressClass..."
-          kubectl get ingressclass nginx -o yaml || echo "No IngressClass found"
-          kubectl delete ingressclass nginx --ignore-not-found=true || true
-          kubectl delete ingressclass -l app.kubernetes.io/managed-by!=Helm --all-namespaces --ignore-not-found=true || true
-          sleep 2
-          echo "✅ Cleared existing IngressClass"
-      
-      - name: Cleanup existing Ingress resources
-        continue-on-error: true
-        run: |
-          echo "🧹 Cleaning up existing Ingress resources..."
-          
-          # Delete existing Helm releases
-          helm uninstall grp1-ingress -n ingress-nginx --ignore-not-found=true || true
-          helm uninstall ingress-nginx -n ingress-nginx --ignore-not-found=true || true
-          helm uninstall ingress-nginx -n ingress-nginx-l --ignore-not-found=true || true
-          
-          # Delete all ingress-nginx related resources by label
-          kubectl delete all -l app.kubernetes.io/name=ingress-nginx --all-namespaces --ignore-not-found=true || true
-          kubectl delete ingressclass -l app.kubernetes.io/name=ingress-nginx --ignore-not-found=true || true
-          kubectl delete clusterrole -l app.kubernetes.io/name=ingress-nginx --ignore-not-found=true || true
-          kubectl delete clusterrolebinding -l app.kubernetes.io/name=ingress-nginx --ignore-not-found=true || true
-          kubectl delete validatingwebhookconfiguration -l app.kubernetes.io/name=ingress-nginx --ignore-not-found=true || true
-          kubectl delete mutatingwebhookconfiguration -l app.kubernetes.io/name=ingress-nginx --ignore-not-found=true || true
-          
-          # Delete specific resources that might not have labels
-          kubectl delete ingressclass nginx --ignore-not-found=true || true
-          kubectl delete clusterrole grp1-ingress-ingress-nginx --ignore-not-found=true || true
-          kubectl delete clusterrole ingress-nginx-ingress-nginx --ignore-not-found=true || true
-          kubectl delete clusterrolebinding grp1-ingress-ingress-nginx --ignore-not-found=true || true
-          kubectl delete clusterrolebinding ingress-nginx-ingress-nginx --ignore-not-found=true || true
-          kubectl delete validatingwebhookconfiguration grp1-ingress-ingress-nginx-admission --ignore-not-found=true || true
-          kubectl delete validatingwebhookconfiguration ingress-nginx-ingress-nginx-admission --ignore-not-found=true || true
-          kubectl delete mutatingwebhookconfiguration grp1-ingress-ingress-nginx-admission --ignore-not-found=true || true
-          kubectl delete mutatingwebhookconfiguration ingress-nginx-ingress-nginx-admission --ignore-not-found=true || true
-          
-          # Delete Jobs
-          kubectl delete job grp1-ingress-ingress-nginx-admission-create -n ingress-nginx --ignore-not-found=true || true
-          kubectl delete job grp1-ingress-ingress-nginx-admission-patch -n ingress-nginx --ignore-not-found=true || true
-          kubectl delete job ingress-nginx-ingress-nginx-admission-create -n ingress-nginx --ignore-not-found=true || true
-          kubectl delete job ingress-nginx-ingress-nginx-admission-patch -n ingress-nginx --ignore-not-found=true || true
-          
-          # Delete existing namespaces
-          kubectl delete namespace ingress-nginx --ignore-not-found=true || true
-          kubectl delete namespace ingress-nginx-l --ignore-not-found=true || true
-          
-          # Wait for cleanup
-          sleep 15
-          echo "✅ Cleanup completed"
 
-      - name: Install Ingress NGINX
+      - name: Install/Upgrade Ingress NGINX
         run: |
           helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
           helm repo update
           
           # Check if Ingress NGINX is already installed
           if helm list -n ingress-nginx | grep -q grp1-ingress; then
-            echo "🌐 Ingress NGINX already installed, skipping..."
-            echo "✅ Ingress NGINX is up to date"
+            echo "🌐 Ingress NGINX already installed, upgrading..."
+            helm upgrade grp1-ingress ingress-nginx/ingress-nginx \
+              --namespace ingress-nginx \
+              --wait \
+              --timeout=10m \
+              --set controller.ingressClassResource.controllerValue="k8s.io/ingress-nginx" \
+              --set controller.ingressClassByName=true \
+              --set controller.service.type=LoadBalancer \
+              --set controller.service.externalTrafficPolicy=Local
+            echo "✅ Ingress NGINX upgraded successfully"
           else
             echo "🌐 Installing Ingress NGINX..."
             helm install grp1-ingress ingress-nginx/ingress-nginx \
@@ -363,16 +318,21 @@ jobs:
           curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
           helm version
       
-      - name: Deploy Monitoring Stack
+      - name: Deploy/Upgrade Monitoring Stack
         run: |
-          echo "🚀 Deploying Prometheus monitoring stack..."
+          echo "🚀 Deploying/Upgrading Prometheus monitoring stack..."
           helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
           helm repo update
           
           # Check if monitoring is already installed
           if helm list -n monitoring | grep -q kube-prometheus-stack; then
-            echo "📊 Monitoring stack already installed, skipping..."
-            echo "✅ Monitoring stack is up to date"
+            echo "📊 Monitoring stack already installed, upgrading..."
+            helm upgrade kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+              --namespace monitoring \
+              --values k8s/monitoring/values.yaml \
+              --wait \
+              --timeout=10m
+            echo "✅ Monitoring stack upgraded successfully"
           else
             echo "📊 Installing monitoring stack..."
             helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
