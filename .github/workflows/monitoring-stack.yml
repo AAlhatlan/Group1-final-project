@@ -1,6 +1,13 @@
 name: Deploy Monitoring Stack
 
 on:
+  push:
+    branches:
+      - groupTest
+      - main
+    paths:
+      - 'k8s/monitoring/**'
+      - '.github/workflows/monitoring-stack.yml'
   workflow_dispatch:
 
 jobs:
@@ -25,7 +32,24 @@ jobs:
         run: |
           helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
           helm repo update
-          helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack --namespace monitoring --create-namespace --wait
+          helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+            --namespace monitoring \
+            --create-namespace \
+            --wait \
+            --values k8s/monitoring/values.yaml
       
-      - name: Get Services
-        run: kubectl get svc -n monitoring
+      - name: Apply Monitoring Manifests
+        run: |
+          echo "Applying ServiceMonitors and PrometheusRules..."
+          kubectl apply -f k8s/monitoring/backend-monitor.yaml || true
+          kubectl apply -f k8s/monitoring/frontend-monitor.yaml || true
+          kubectl apply -f k8s/monitoring/alerts.yaml || true
+          echo "✅ Monitoring manifests applied"
+      
+      - name: Verify Deployment
+        run: |
+          echo "=== Monitoring Services ==="
+          kubectl get svc -n monitoring
+          echo ""
+          echo "=== Monitoring Pods ==="
+          kubectl get pods -n monitoring
