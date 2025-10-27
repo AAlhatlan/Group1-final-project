@@ -1,0 +1,22 @@
+# k8s/monitoring/frontend-monitor.yaml
+
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: frontend
+  namespace: app
+  labels:
+    app: frontend
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: frontend
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
+  namespaceSelector:
+    matchNames:
+    - app

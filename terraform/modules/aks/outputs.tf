@@ -22,3 +22,8 @@ output "aks_identity_id" {
   description = "Object ID of the AKS kubelet managed identity"
   value       = azurerm_kubernetes_cluster.aks.kubelet_identity[0].object_id
 }
+
+output "aks_identity_client_id" {
+  description = "Client ID of the AKS kubelet managed identity"
+  value       = azurerm_kubernetes_cluster.aks.kubelet_identity[0].client_id
+}

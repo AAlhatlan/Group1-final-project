@@ -1,8 +1,8 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: frontend-services
-  namespace: grp1-app
+  name: app-frontend-ingress
+  namespace: app
   annotations:
     nginx.ingress.kubernetes.io/rewrite-target: /
 spec:
@@ -10,10 +10,10 @@ spec:
   rules:
     - http:
         paths:
-          - path: /
+          - path: /app
             pathType: Prefix
             backend:
               service:
-                name: frontend-service
+                name: app-frontend-service
                 port:
                   number: 80

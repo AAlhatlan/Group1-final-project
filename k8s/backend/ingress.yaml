@@ -1,17 +1,17 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: backend-services
-  namespace: grp1-app
+  name: app-backend-ingress
+  namespace: app
 spec:
   ingressClassName: nginx
   rules:
     - http:
         paths:
-          - path: /api
+          - path: /app-api
             pathType: Prefix
             backend:
               service:
-                name: backend-service
+                name: app-backend-service
                 port:
                   number: 8080

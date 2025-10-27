@@ -2,7 +2,7 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: sql-test-pod
-  namespace: grp1-app
+  namespace: app
 spec:
   containers:
   - name: tester

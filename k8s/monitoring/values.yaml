@@ -1,0 +1,83 @@
+# k8s/monitoring/values.yaml
+
+grafana:
+  enabled: true
+  adminPassword: "admin123"
+  service:
+    type: LoadBalancer
+  
+  dashboards:
+    default:
+      kubernetes-cluster:
+        gnetId: 7249
+        datasource: Prometheus
+      kubernetes-pods:
+        gnetId: 6417
+        datasource: Prometheus
+      spring-boot:
+        gnetId: 12900
+        datasource: Prometheus
+      nginx-ingress:
+        gnetId: 9614
+        datasource: Prometheus
+
+prometheus:
+  prometheusSpec:
+    retention: 7d
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorNamespaceSelector: {}
+    serviceMonitorSelector: {}
+
+alertmanager:
+  enabled: true
+  config:
+    global:
+      resolve_timeout: 5m
+    
+    route:
+      receiver: 'slack-alerts'
+      group_by: ['alertname', 'namespace', 'severity']
+      group_wait: 10s
+      group_interval: 5m
+      repeat_interval: 4h
+      
+      routes:
+      - match:
+          severity: critical
+        receiver: 'slack-critical'
+      - match:
+          severity: warning
+        receiver: 'slack-warnings'
+    
+    receivers:
+    - name: 'slack-alerts'
+      slack_configs:
+      - api_url: 'https://hooks.slack.com/services/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'
+        channel: '#prometheus-monitoring'
+        username: 'Alertmanager'
+        icon_emoji: ':bell:'
+        title: 'Alert: {{ .GroupLabels.alertname }}'
+        text: 'Summary: {{ .CommonAnnotations.summary }}'
+        send_resolved: true
+    
+    - name: 'slack-critical'
+      slack_configs:
+      - api_url: 'https://hooks.slack.com/services/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'
+        channel: '#prometheus-monitoring'
+        username: 'Alertmanager'
+        icon_emoji: ':rotating_light:'
+        color: 'danger'
+        title: 'CRITICAL Alert: {{ .GroupLabels.alertname }}'
+        text: 'Summary: {{ .CommonAnnotations.summary }}'
+        send_resolved: true
+    
+    - name: 'slack-warnings'
+      slack_configs:
+      - api_url: 'https://hooks.slack.com/services/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'
+        channel: '#prometheus-monitoring'
+        username: 'Alertmanager'
+        icon_emoji: ':warning:'
+        color: 'warning'
+        title: 'WARNING Alert: {{ .GroupLabels.alertname }}'
+        text: 'Summary: {{ .CommonAnnotations.summary }}'
+        send_resolved: true

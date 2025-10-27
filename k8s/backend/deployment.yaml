@@ -1,13 +1,18 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: backend-deployment
-  namespace: grp1-app
+  name: app-backend-deployment
+  namespace: app
 spec:
-  replicas: 1
+  replicas: 3
   selector:
     matchLabels:
       app: backend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
   template:
     metadata:
       labels:
@@ -19,38 +24,63 @@ spec:
           ports:
             - containerPort: 8080
           env:
-            - name: DB_URL
+            - name: SPRING_DATASOURCE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: app-backend-config
+                  key: SPRING_DATASOURCE_URL
+            - name: SPRING_DATASOURCE_USERNAME
               valueFrom:
                 secretKeyRef:
-                  name: backend-secret
-                  key: DB_URL
-            - name: DB_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: backend-secret
+                  name: app-backend-secret
                   key: DB_USERNAME
-            - name: DB_PASSWORD
+            - name: SPRING_DATASOURCE_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: backend-secret
+                  name: app-backend-secret
                   key: DB_PASSWORD
-            - name: DB_DRIVER
-              valueFrom:
-                secretKeyRef:
-                  name: backend-secret
-                  key: DB_DRIVER
             - name: SPRING_PROFILES_ACTIVE
               valueFrom:
                 configMapKeyRef:
-                  name: backend-config
+                  name: app-backend-config
                   key: SPRING_PROFILES_ACTIVE
             - name: SPRING_WEB_CORS_ALLOWED_ORIGINS
               valueFrom:
                 configMapKeyRef:
-                  name: backend-config
+                  name: app-backend-config
                   key: SPRING_WEB_CORS_ALLOWED_ORIGINS
-            - name: SERVER_PORT
-              valueFrom:
-                configMapKeyRef:
-                  name: backend-config
-                  key: SERVER_PORT
+          
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 10
+          
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 5
+          
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2000m"
+              memory: "1Gi"
+          
+      #     volumeMounts:
+      #       - name: backend-secrets
+      #         mountPath: /mnt/secrets-store
+      #         readOnly: true
+      
+      # volumes:
+      #   - name: backend-secrets
+      #     csi:
+      #       driver: secrets-store.csi.k8s.io
+      #       readOnly: true
+      #       volumeAttributes:
+      #         secretProviderClass: backend-sql-secrets

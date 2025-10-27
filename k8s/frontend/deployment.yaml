@@ -1,13 +1,18 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: frontend-deployment
-  namespace: grp1-app
+  name: app-frontend-deployment
+  namespace: app
 spec:
-  replicas: 2
+  replicas: 3
   selector:
     matchLabels:
       app: frontend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
   template:
     metadata:
       labels:
@@ -20,4 +25,26 @@ spec:
             - containerPort: 80
           envFrom:
             - configMapRef:
-                name: frontend-config
+                name: app-frontend-config
+          
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2000m"
+              memory: "1Gi"
