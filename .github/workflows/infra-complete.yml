@@ -238,28 +238,7 @@ jobs:
           
           echo "✅ Frontend ConfigMap updated with IP: $LB_IP"
 
-      - name: Cleanup existing Backend and Frontend resources
-        if: steps.detect.outputs.found == 'true'
-        run: |
-          echo "🧹 Cleaning up existing Backend and Frontend resources..."
-          
-          # Delete existing Ingress resources
-          kubectl delete ingress app-backend-ingress -n app --ignore-not-found=true || true
-          kubectl delete ingress app-frontend-ingress -n app --ignore-not-found=true || true
-          
-          # Delete existing Services
-          kubectl delete service app-backend-service -n app --ignore-not-found=true || true
-          kubectl delete service app-frontend-service -n app --ignore-not-found=true || true
-          
-          # Delete existing Deployments
-          kubectl delete deployment app-backend-deployment -n app --ignore-not-found=true || true
-          kubectl delete deployment app-frontend-deployment -n app --ignore-not-found=true || true
-          
-          # Wait for cleanup
-          sleep 5
-          echo "✅ Backend and Frontend resources cleaned up"
-
-      - name: Apply Kubernetes manifests
+      - name: Apply/Update Kubernetes manifests
         if: steps.detect.outputs.found == 'true'
         run: |
           set -euo pipefail
