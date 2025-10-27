@@ -2,11 +2,10 @@
 
 grafana:
   enabled: true
-  adminPassword: "admin123"  # غيرها!
+  adminPassword: "admin123" #اغيرها مممهههمممم
   service:
     type: LoadBalancer
   
-  # Dashboards جاهزة فقط
   dashboards:
     default:
       kubernetes-cluster:
@@ -14,6 +13,12 @@ grafana:
         datasource: Prometheus
       kubernetes-pods:
         gnetId: 6417
+        datasource: Prometheus
+      spring-boot:
+        gnetId: 12900
+        datasource: Prometheus
+      nginx-ingress:
+        gnetId: 9614
         datasource: Prometheus
 
 prometheus:
