@@ -1,0 +1,49 @@
+name: Deploy Monitoring Stack
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - groupTest
+    paths:
+      - 'k8s/monitoring/**'
+
+jobs:
+  deploy-monitoring:
+    name: Deploy Monitoring
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      
+      - name: Set AKS Context
+        uses: azure/aks-set-context@v3
+        with:
+          resource-group: rg-group1-austriaeast
+          cluster-name: grp1-aks
+      
+      - name: Deploy Stack
+        run: |
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+          
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm repo update
+          
+          helm upgrade --install kube-prometheus-stack \
+            prometheus-community/kube-prometheus-stack \
+            --namespace monitoring \
+            --create-namespace \
+            --wait
+          
+          kubectl patch svc kube-prometheus-stack-grafana -n monitoring \
+            -p '{"spec":{"type":"LoadBalancer"}}'
+          
+          kubectl apply -f k8s/monitoring/ || true
+          
+          echo "✅ Monitoring deployed!"
