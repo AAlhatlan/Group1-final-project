@@ -100,52 +100,70 @@ jobs:
           sleep 2
           echo "✅ Cleared existing IngressClass"
       
+      - name: Cleanup existing Ingress resources
+        continue-on-error: true
+        run: |
+          echo "🧹 Cleaning up existing Ingress resources..."
+          
+          # Delete existing Helm releases
+          helm uninstall grp1-ingress -n ingress-nginx --ignore-not-found=true || true
+          helm uninstall ingress-nginx -n ingress-nginx --ignore-not-found=true || true
+          helm uninstall ingress-nginx -n ingress-nginx-l --ignore-not-found=true || true
+          
+          # Delete existing IngressClass
+          kubectl delete ingressclass nginx --ignore-not-found=true || true
+          kubectl delete ingressclass -l app.kubernetes.io/managed-by!=Helm --all-namespaces --ignore-not-found=true || true
+          
+          # Delete existing ClusterRoles and ClusterRoleBindings
+          kubectl delete clusterrole grp1-ingress-ingress-nginx --ignore-not-found=true || true
+          kubectl delete clusterrole ingress-nginx-ingress-nginx --ignore-not-found=true || true
+          kubectl delete clusterrolebinding grp1-ingress-ingress-nginx --ignore-not-found=true || true
+          kubectl delete clusterrolebinding ingress-nginx-ingress-nginx --ignore-not-found=true || true
+          
+          # Delete existing namespaces
+          kubectl delete namespace ingress-nginx --ignore-not-found=true || true
+          kubectl delete namespace ingress-nginx-l --ignore-not-found=true || true
+          
+          # Wait for cleanup
+          sleep 5
+          echo "✅ Cleanup completed"
+
       - name: Install Ingress NGINX
         run: |
           helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
           helm repo update
           
-          # Check if ingress is already installed
-          if helm list -n ingress-nginx | grep -q grp1-ingress; then
-            echo "Ingress NGINX already installed, upgrading..."
-            helm upgrade grp1-ingress ingress-nginx/ingress-nginx \
-              --namespace ingress-nginx \
-              --wait \
-              --reuse-values
-          else
-            echo "Installing Ingress NGINX..."
-            # First, try to delete the existing IngressClass with force
-            kubectl patch ingressclass nginx -p '{"metadata":{"finalizers":[]}}' --type=merge || true
-            kubectl delete ingressclass nginx --force --grace-period=0 || true
-            sleep 3
-            
-            # Install with custom IngressClass configuration
-            helm install grp1-ingress ingress-nginx/ingress-nginx \
-              --namespace ingress-nginx \
-              --create-namespace \
-              --wait \
-              --set controller.ingressClassResource.controllerValue="k8s.io/ingress-nginx" \
-              --set controller.ingressClassByName=true
-          fi
+          echo "Installing Ingress NGINX..."
+          helm install grp1-ingress ingress-nginx/ingress-nginx \
+            --namespace ingress-nginx \
+            --create-namespace \
+            --wait \
+            --timeout=10m \
+            --set controller.ingressClassResource.controllerValue="k8s.io/ingress-nginx" \
+            --set controller.ingressClassByName=true \
+            --set controller.service.type=LoadBalancer \
+            --set controller.service.externalTrafficPolicy=Local
       
       - name: Wait for LoadBalancer IP
         id: lb_ip
         run: |
           echo "Waiting for LoadBalancer IP..."
-          timeout=300
+          timeout=600  # 10 minutes timeout
           elapsed=0
           while [ $elapsed -lt $timeout ]; do
             LB_IP=$(kubectl get svc grp1-ingress-ingress-nginx-controller -n ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
-            if [ -n "$LB_IP" ] && [ "$LB_IP" != "null" ] && [ "$LB_IP" != "None" ]; then
-              echo "LoadBalancer IP obtained: $LB_IP"
+            if [ -n "$LB_IP" ] && [ "$LB_IP" != "null" ] && [ "$LB_IP" != "None" ] && [ "$LB_IP" != "" ]; then
+              echo "✅ LoadBalancer IP obtained: $LB_IP"
               echo "ip=$LB_IP" >> $GITHUB_OUTPUT
               exit 0
             fi
-            echo "Waiting for IP... ($elapsed seconds)"
-            sleep 10
-            elapsed=$((elapsed + 10))
+            echo "⏳ Waiting for IP... ($elapsed seconds)"
+            sleep 15
+            elapsed=$((elapsed + 15))
           done
-          echo "⚠️ Timeout waiting for LoadBalancer IP"
+          echo "⚠️ Timeout waiting for LoadBalancer IP after $timeout seconds"
+          echo "Checking service status..."
+          kubectl get svc grp1-ingress-ingress-nginx-controller -n ingress-nginx -o wide
           exit 1
       
       - name: Display LoadBalancer Info
