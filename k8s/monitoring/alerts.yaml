@@ -6,35 +6,93 @@ metadata:
   name: app-alerts
   namespace: monitoring
   labels:
-    release: monitoring
+    release: kube-prometheus-stack
+    prometheus: kube-prometheus-stack-prometheus
 spec:
   groups:
-  - name: app
+  - name: application.rules
+    interval: 30s
     rules:
-    # High Error Rate
+    # High Error Rate (5xx)
     - alert: HighErrorRate
       expr: |
-        sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m])) 
-        / 
-        sum(rate(http_server_requests_seconds_count[5m])) 
-        > 0.05
+        (
+          sum(rate(http_server_requests_seconds_count{status=~"5..", job="backend"}[5m])) 
+          / 
+          sum(rate(http_server_requests_seconds_count{job="backend"}[5m]))
+        ) > 0.05
       for: 5m
+      labels:
+        severity: warning
+        component: backend
       annotations:
-        summary: "High error rate detected"
+        summary: "High error rate detected in backend"
+        description: "Backend 5xx error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+        runbook_url: "https://github.com/your-repo/runbooks/high-error-rate.md"
     
-    # High Latency
+    # High API Latency (p95)
     - alert: HighLatency
       expr: |
         histogram_quantile(0.95, 
-          rate(http_server_requests_seconds_bucket[5m])
+          rate(http_server_requests_seconds_bucket{job="backend"}[5m])
         ) > 0.3
       for: 5m
+      labels:
+        severity: warning
+        component: backend
       annotations:
-        summary: "API latency is high"
+        summary: "API latency is high (p95 > 300ms)"
+        description: "Backend p95 latency is {{ $value }}s"
+        runbook_url: "https://github.com/your-repo/runbooks/high-latency.md"
     
     # Pod Down
     - alert: PodDown
-      expr: up == 0
+      expr: up{job=~"backend|frontend"} == 0
       for: 2m
+      labels:
+        severity: critical
       annotations:
-        summary: "Pod is down"
+        summary: "Application pod is down"
+        description: "Pod {{ $labels.job }} in namespace {{ $labels.namespace }} has been down for 2+ minutes"
+        runbook_url: "https://github.com/your-repo/runbooks/pod-down.md"
+    
+    # Pod Crash Looping
+    - alert: PodCrashLooping
+      expr: rate(kube_pod_container_status_restarts_total{namespace="app"}[15m]) > 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Pod is crash looping"
+        description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is restarting frequently"
+        runbook_url: "https://github.com/your-repo/runbooks/crash-loop.md"
+    
+    # High Memory Usage
+    - alert: HighMemoryUsage
+      expr: |
+        (
+          container_memory_working_set_bytes{namespace="app", container!=""}
+          /
+          container_spec_memory_limit_bytes{namespace="app", container!=""}
+        ) > 0.9
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High memory usage detected"
+        description: "Container {{ $labels.namespace }}/{{ $labels.pod }}/{{ $labels.container }} is using {{ $value | humanizePercentage }} of memory limit"
+    
+    # HPA Maxed Out
+    - alert: HPAMaxedOut
+      expr: |
+        (
+          kube_horizontalpodautoscaler_status_current_replicas{namespace="app"}
+          /
+          kube_horizontalpodautoscaler_spec_max_replicas{namespace="app"}
+        ) >= 0.95
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: "HPA is near maximum replicas"
+        description: "HPA {{ $labels.namespace }}/{{ $labels.horizontalpodautoscaler }} is at {{ $value | humanizePercentage }} of max replicas"

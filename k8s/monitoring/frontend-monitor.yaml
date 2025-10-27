@@ -6,7 +6,8 @@ metadata:
   name: frontend
   namespace: app
   labels:
-    release: monitoring
+    app: frontend
+    release: kube-prometheus-stack
 spec:
   selector:
     matchLabels:
@@ -15,3 +16,7 @@ spec:
   - port: http
     path: /metrics
     interval: 30s
+    scrapeTimeout: 10s
+  namespaceSelector:
+    matchNames:
+    - app
