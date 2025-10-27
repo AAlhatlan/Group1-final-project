@@ -110,21 +110,22 @@ jobs:
           helm uninstall ingress-nginx -n ingress-nginx --ignore-not-found=true || true
           helm uninstall ingress-nginx -n ingress-nginx-l --ignore-not-found=true || true
           
-          # Delete existing IngressClass
-          kubectl delete ingressclass nginx --ignore-not-found=true || true
-          kubectl delete ingressclass -l app.kubernetes.io/managed-by!=Helm --all-namespaces --ignore-not-found=true || true
+          # Delete all ingress-nginx related resources by label
+          kubectl delete all -l app.kubernetes.io/name=ingress-nginx --all-namespaces --ignore-not-found=true || true
+          kubectl delete ingressclass -l app.kubernetes.io/name=ingress-nginx --ignore-not-found=true || true
+          kubectl delete clusterrole -l app.kubernetes.io/name=ingress-nginx --ignore-not-found=true || true
+          kubectl delete clusterrolebinding -l app.kubernetes.io/name=ingress-nginx --ignore-not-found=true || true
+          kubectl delete validatingwebhookconfiguration -l app.kubernetes.io/name=ingress-nginx --ignore-not-found=true || true
+          kubectl delete mutatingwebhookconfiguration -l app.kubernetes.io/name=ingress-nginx --ignore-not-found=true || true
           
-          # Delete existing ClusterRoles and ClusterRoleBindings
+          # Delete specific resources that might not have labels
+          kubectl delete ingressclass nginx --ignore-not-found=true || true
           kubectl delete clusterrole grp1-ingress-ingress-nginx --ignore-not-found=true || true
           kubectl delete clusterrole ingress-nginx-ingress-nginx --ignore-not-found=true || true
           kubectl delete clusterrolebinding grp1-ingress-ingress-nginx --ignore-not-found=true || true
           kubectl delete clusterrolebinding ingress-nginx-ingress-nginx --ignore-not-found=true || true
-          
-          # Delete ValidatingWebhookConfigurations
           kubectl delete validatingwebhookconfiguration grp1-ingress-ingress-nginx-admission --ignore-not-found=true || true
           kubectl delete validatingwebhookconfiguration ingress-nginx-ingress-nginx-admission --ignore-not-found=true || true
-          
-          # Delete MutatingWebhookConfigurations
           kubectl delete mutatingwebhookconfiguration grp1-ingress-ingress-nginx-admission --ignore-not-found=true || true
           kubectl delete mutatingwebhookconfiguration ingress-nginx-ingress-nginx-admission --ignore-not-found=true || true
           
@@ -139,7 +140,7 @@ jobs:
           kubectl delete namespace ingress-nginx-l --ignore-not-found=true || true
           
           # Wait for cleanup
-          sleep 10
+          sleep 15
           echo "✅ Cleanup completed"
 
       - name: Install Ingress NGINX
@@ -202,14 +203,21 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p k8s || true
-          files=$(find k8s -type f \( -name '*.yml' -o -name '*.yaml' \) -size +0c | sort || true)
+          
+          # Find only valid Kubernetes manifest files
+          files=$(find k8s -type f \( -name '*.yml' -o -name '*.yaml' \) -size +0c | while read -r file; do
+            if grep -q "apiVersion:" "$file" && grep -q "kind:" "$file"; then
+              echo "$file"
+            fi
+          done | sort || true)
+          
           if [ -n "$files" ]; then
             echo "found=true" >> "$GITHUB_OUTPUT"
-            echo "Manifests found:"
+            echo "Valid Kubernetes manifests found:"
             cat <<< "$files"
           else
             echo "found=false" >> "$GITHUB_OUTPUT"
-            echo "❌ No manifests found, skipping."
+            echo "❌ No valid Kubernetes manifests found, skipping."
           fi
 
       - name: Setup kubectl
@@ -265,7 +273,18 @@ jobs:
             kubectl apply -f k8s/namespace.yml
           fi
 
-          kubectl apply -R -f k8s
+          # Apply manifests excluding non-Kubernetes files
+          echo "Applying Kubernetes manifests..."
+          find k8s -name "*.yaml" -o -name "*.yml" | while read -r file; do
+            # Skip files that are not Kubernetes manifests
+            if grep -q "apiVersion:" "$file" && grep -q "kind:" "$file"; then
+              echo "Applying $file..."
+              kubectl apply -f "$file" || echo "⚠️ Failed to apply $file, continuing..."
+            else
+              echo "⏭️ Skipping $file (not a Kubernetes manifest)"
+            fi
+          done
+          
           echo "✅ All manifests applied successfully."
 
       - name: Verify Deployment Rollouts
