@@ -1,0 +1,25 @@
+# k8s/monitoring/values.yaml
+
+grafana:
+  enabled: true
+  adminPassword: "admin123"  # غيرها!
+  service:
+    type: LoadBalancer
+  
+  # Dashboards جاهزة فقط
+  dashboards:
+    default:
+      kubernetes-cluster:
+        gnetId: 7249
+        datasource: Prometheus
+      kubernetes-pods:
+        gnetId: 6417
+        datasource: Prometheus
+
+prometheus:
+  prometheusSpec:
+    retention: 7d
+    serviceMonitorSelectorNilUsesHelmValues: false
+
+alertmanager:
+  enabled: true

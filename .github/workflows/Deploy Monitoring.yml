@@ -1,55 +1,48 @@
-name: Deploy Monitoring Stack
+# .github/workflows/monitoring-stack.yml
+
+name: Deploy Monitoring
 
 on:
-  push:
-    branches:
-      - groupTest
-      - main
-    paths:
-      - 'k8s/monitoring/**'
-      - '.github/workflows/Deploy Monitoring.yml'
   workflow_dispatch:
 
-permissions:
-  id-token: write
-  contents: read
-
 jobs:
-  deploy-monitoring:
-    name: Deploy kube-prometheus-stack to AKS
+  deploy:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
+      - uses: actions/checkout@v4
+      
       - name: Azure Login
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: Get AKS credentials
-        run: az aks get-credentials --resource-group rg-group1-austriaeast --name grp1-aks --admin --overwrite-existing
-
-      - name: Setup Helm
-        uses: azure/setup-helm@v3
+      
+      - name: Set AKS Context
+        uses: azure/aks-set-context@v3
         with:
-          version: v3.12.3
-
-      - name: Deploy kube-prometheus-stack via Helm
+          resource-group: ${{ secrets.AZURE_RESOURCE_GROUP }}
+          cluster-name: ${{ secrets.AKS_CLUSTER_NAME }}
+      
+      - name: Install Helm
         run: |
-          kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      
+      - name: Deploy Monitoring Stack
+        run: |
           helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
           helm repo update
-          helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
-            -n monitoring \
-            -f k8s/monitoring/helm-values/kube-prometheus-values.yaml \
+          
+          helm upgrade --install monitoring prometheus-community/kube-prometheus-stack \
+            --namespace monitoring \
+            --create-namespace \
+            --values k8s/monitoring/values.yaml \
             --wait
-
-      - name: Apply monitoring manifests
-        run: kubectl apply -f k8s/monitoring/manifests/
-
-      - name: Verify Prometheus pods
+      
+      - name: Apply ServiceMonitors
         run: |
-          kubectl get pods -n monitoring
-          kubectl rollout status deploy/kube-prometheus-stack-grafana -n monitoring --timeout=180s
+          kubectl apply -f k8s/monitoring/backend-monitor.yaml
+          kubectl apply -f k8s/monitoring/frontend-monitor.yaml
+          kubectl apply -f k8s/monitoring/alerts.yaml
+      
+      - name: Get Grafana URL
+        run: |
+          kubectl get svc -n monitoring
