@@ -120,12 +120,26 @@ jobs:
           kubectl delete clusterrolebinding grp1-ingress-ingress-nginx --ignore-not-found=true || true
           kubectl delete clusterrolebinding ingress-nginx-ingress-nginx --ignore-not-found=true || true
           
+          # Delete ValidatingWebhookConfigurations
+          kubectl delete validatingwebhookconfiguration grp1-ingress-ingress-nginx-admission --ignore-not-found=true || true
+          kubectl delete validatingwebhookconfiguration ingress-nginx-ingress-nginx-admission --ignore-not-found=true || true
+          
+          # Delete MutatingWebhookConfigurations
+          kubectl delete mutatingwebhookconfiguration grp1-ingress-ingress-nginx-admission --ignore-not-found=true || true
+          kubectl delete mutatingwebhookconfiguration ingress-nginx-ingress-nginx-admission --ignore-not-found=true || true
+          
+          # Delete Jobs
+          kubectl delete job grp1-ingress-ingress-nginx-admission-create -n ingress-nginx --ignore-not-found=true || true
+          kubectl delete job grp1-ingress-ingress-nginx-admission-patch -n ingress-nginx --ignore-not-found=true || true
+          kubectl delete job ingress-nginx-ingress-nginx-admission-create -n ingress-nginx --ignore-not-found=true || true
+          kubectl delete job ingress-nginx-ingress-nginx-admission-patch -n ingress-nginx --ignore-not-found=true || true
+          
           # Delete existing namespaces
           kubectl delete namespace ingress-nginx --ignore-not-found=true || true
           kubectl delete namespace ingress-nginx-l --ignore-not-found=true || true
           
           # Wait for cleanup
-          sleep 5
+          sleep 10
           echo "✅ Cleanup completed"
 
       - name: Install Ingress NGINX
