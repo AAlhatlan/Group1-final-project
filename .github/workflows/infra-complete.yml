@@ -4,6 +4,10 @@ on:
   workflow_dispatch:
   push:
     branches: [ main, groupTest ]
+    paths:
+      - 'k8s/**'
+      - 'terraform/**'
+      - '.github/workflows/infra-complete.yml'
 
 jobs:
   terraform_apply:
@@ -293,3 +297,93 @@ jobs:
         run: |
           kubectl -n "$K8S_NAMESPACE" get deploy || exit 0
           kubectl -n "$K8S_NAMESPACE" rollout status deploy --timeout=120s
+
+  deploy_monitoring:
+    name: Deploy Monitoring Stack
+    runs-on: ubuntu-latest
+    needs: [terraform_apply, deploy_ingress]
+    env:
+      KUBE_CONFIG_DATA: ${{ needs.terraform_apply.outputs.kube_config_data }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      
+      - name: Set AKS Context
+        uses: azure/aks-set-context@v3
+        with:
+          resource-group: rg-group1-austriaeast
+          cluster-name: grp1-aks
+      
+      - name: Install Helm
+        run: |
+          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+          helm version
+      
+      - name: Deploy Monitoring Stack
+        run: |
+          echo "🚀 Deploying Prometheus monitoring stack..."
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm repo update
+          
+          # Check if monitoring is already installed
+          if helm list -n monitoring | grep -q kube-prometheus-stack; then
+            echo "📊 Monitoring stack already installed, upgrading..."
+            helm upgrade kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+              --namespace monitoring \
+              --values k8s/monitoring/values.yaml \
+              --wait \
+              --timeout=10m
+          else
+            echo "📊 Installing monitoring stack..."
+            helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+              --namespace monitoring \
+              --create-namespace \
+              --values k8s/monitoring/values.yaml \
+              --wait \
+              --timeout=10m
+          fi
+          
+          echo "✅ Monitoring stack deployed successfully"
+      
+      - name: Apply Monitoring Manifests
+        run: |
+          echo "📋 Applying ServiceMonitors and PrometheusRules..."
+          
+          # Apply monitoring manifests if they exist
+          if [ -f k8s/monitoring/backend-monitor.yaml ]; then
+            kubectl apply -f k8s/monitoring/backend-monitor.yaml
+            echo "✅ Backend ServiceMonitor applied"
+          fi
+          
+          if [ -f k8s/monitoring/frontend-monitor.yaml ]; then
+            kubectl apply -f k8s/monitoring/frontend-monitor.yaml
+            echo "✅ Frontend ServiceMonitor applied"
+          fi
+          
+          if [ -f k8s/monitoring/alerts.yaml ]; then
+            kubectl apply -f k8s/monitoring/alerts.yaml
+            echo "✅ PrometheusRules applied"
+          fi
+          
+          echo "✅ All monitoring manifests applied"
+      
+      - name: Verify Monitoring Deployment
+        run: |
+          echo "=== 📊 Monitoring Services ==="
+          kubectl get svc -n monitoring
+          echo ""
+          echo "=== 📊 Monitoring Pods ==="
+          kubectl get pods -n monitoring
+          echo ""
+          echo "=== 📊 ServiceMonitors ==="
+          kubectl get servicemonitor -n monitoring
+          echo ""
+          echo "=== 📊 PrometheusRules ==="
+          kubectl get prometheusrule -n monitoring
+          echo ""
+          echo "✅ Monitoring verification completed"
