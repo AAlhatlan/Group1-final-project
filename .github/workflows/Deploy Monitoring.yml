@@ -4,7 +4,7 @@ on:
   push:
     paths:
       - 'k8s/monitoring/**'
-      - '.github/workflows/monitoring.yml'
+      - '.github/workflows/Deploy Monitoring.yml'
 
 permissions:
   id-token: write
@@ -25,7 +25,7 @@ jobs:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Get AKS credentials
-        run: az aks get-credentials --resource-group rg-capstone --name aks-capstone --admin --overwrite-existing
+        run: az aks get-credentials --resource-group rg-group1-austriaeast --name grp1-aks --admin --overwrite-existing
 
       - name: Setup Helm
         uses: azure/setup-helm@v3
