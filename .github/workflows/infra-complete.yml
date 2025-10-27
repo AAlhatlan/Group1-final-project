@@ -242,27 +242,29 @@ jobs:
         if: steps.detect.outputs.found == 'true'
         run: |
           set -euo pipefail
-          echo "Applying manifests to cluster..."
+          echo "🔄 Applying/Updating manifests to cluster..."
 
           if [ -f k8s/namespace.yaml ]; then
             kubectl apply -f k8s/namespace.yaml
+            echo "✅ Namespace applied/updated"
           elif [ -f k8s/namespace.yml ]; then
             kubectl apply -f k8s/namespace.yml
+            echo "✅ Namespace applied/updated"
           fi
 
           # Apply manifests excluding non-Kubernetes files
-          echo "Applying Kubernetes manifests..."
+          echo "🔄 Applying/Updating Kubernetes manifests..."
           find k8s -name "*.yaml" -o -name "*.yml" | while read -r file; do
             # Skip files that are not Kubernetes manifests
             if grep -q "apiVersion:" "$file" && grep -q "kind:" "$file"; then
-              echo "Applying $file..."
+              echo "🔄 Applying/Updating $file..."
               kubectl apply -f "$file" || echo "⚠️ Failed to apply $file, continuing..."
             else
               echo "⏭️ Skipping $file (not a Kubernetes manifest)"
             fi
           done
           
-          echo "✅ All manifests applied successfully."
+          echo "✅ All manifests applied/updated successfully."
 
       - name: Verify Deployment Rollouts
         if: steps.detect.outputs.found == 'true'
