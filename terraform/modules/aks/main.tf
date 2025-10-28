@@ -13,7 +13,7 @@ resource "azurerm_kubernetes_cluster" "aks" {
   location            = var.location
   resource_group_name = var.resource_group_name
   dns_prefix          = "${var.prefix}-dns"
-
+  
   default_node_pool {
     name                        = "default"
     node_count                  = var.node_count
@@ -23,8 +23,12 @@ resource "azurerm_kubernetes_cluster" "aks" {
   }
 
   identity {
-    type         = "UserAssigned"
-    identity_ids = [var.user_assigned_identity_id]
+    type                       = "UserAssigned"
+    user_assigned_identity_ids = [var.user_assigned_identity_id]
+  }
+
+  key_vault_secrets_provider {
+    enabled = true
   }
 
   network_profile {
