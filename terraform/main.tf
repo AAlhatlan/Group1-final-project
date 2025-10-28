@@ -71,6 +71,14 @@ module "key_vault" {
     [
       {
         tenant_id               = data.azurerm_client_config.current.tenant_id
+        object_id               = data.azurerm_client_config.current.object_id
+        certificate_permissions = []
+        key_permissions         = []
+        secret_permissions      = ["Get", "List", "Set", "Delete"]
+        storage_permissions     = []
+      },
+      {
+        tenant_id               = data.azurerm_client_config.current.tenant_id
         object_id               = module.aks.aks_identity_id
         certificate_permissions = []
         key_permissions         = []
