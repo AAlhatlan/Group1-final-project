@@ -75,3 +75,8 @@ variable "userpool_max_count" {
   type        = number
   default     = 5
 }
+
+variable "user_assigned_identity_id" {
+  description = "Resource ID of the user assigned managed identity bound to AKS"
+  type        = string
+}

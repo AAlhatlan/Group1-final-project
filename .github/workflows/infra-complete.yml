@@ -1,364 +1,144 @@
-name: Complete Infrastructure Deploy
+name: infra-complete
 
 on:
   workflow_dispatch:
   push:
-    branches: [ main, groupTest ]
-    paths:
-      - 'k8s/**'
-      - 'terraform/**'
-      - '.github/workflows/infra-complete.yml'
+    branches:
+      - main
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  TF_IN_AUTOMATION: true
+  ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+  ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
 jobs:
-  terraform_apply:
-    name: Terraform Apply
+  terraform:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: terraform
-    env:
-      TF_VAR_sql_password: ${{ secrets.SQL_ADMIN_PASSWORD }}
-      TF_VAR_location: ${{ secrets.AZURE_LOCATION || vars.AZURE_LOCATION || 'austriaeast' }}
     outputs:
-      kube_config_data: ${{ steps.export_kubeconfig.outputs.kube_config_data }}
+      kubeconfig: ${{ steps.capture.outputs.kubeconfig }}
+      key_vault_name: ${{ steps.capture.outputs.key_vault_name }}
+      aks_uami_client_id: ${{ steps.capture.outputs.aks_uami_client_id }}
+      tenant_id: ${{ steps.capture.outputs.tenant_id }}
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Azure Login
-        uses: azure/login@v2
+      - name: Azure login
+        uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Setup Terraform
+      - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.13.3
-          terraform_wrapper: false
 
-      - name: Show Terraform version and path
-        id: tfver
+      - name: Terraform init
+        working-directory: terraform
+        run: terraform init -input=false
+
+      - name: Terraform apply
+        working-directory: terraform
+        env:
+          TF_VAR_sql_password: ${{ secrets.SQL_ADMIN_PASSWORD }}
+        run: terraform apply -auto-approve
+
+      - name: Capture Terraform outputs
+        id: capture
+        working-directory: terraform
         run: |
-          terraform version
-          echo "TF_BIN=$(command -v terraform)" >> "$GITHUB_ENV"
+          echo "kubeconfig<<EOF" >> $GITHUB_OUTPUT
+          terraform output -raw aks_kube_config >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "key_vault_name=$(terraform output -raw key_vault_name)" >> $GITHUB_OUTPUT
+          echo "aks_uami_client_id=$(terraform output -raw aks_user_assigned_identity_client_id)" >> $GITHUB_OUTPUT
+          echo "tenant_id=$(terraform output -raw tenant_id)" >> $GITHUB_OUTPUT
 
-      - name: Terraform Init (with backend)
-        run: $TF_BIN init -input=false -upgrade
-
-      - name: Terraform Apply
-        run: $TF_BIN apply -auto-approve -lock=false -input=false
-
-      # Export AKS kubeconfig dynamically
-      - name: Export AKS kubeconfig
-        id: export_kubeconfig
-        shell: bash
-        run: |
-          echo "Fetching AKS credentials dynamically..."
-          az aks get-credentials \
-            --resource-group rg-group1-austriaeast \
-            --name grp1-aks \
-            --file kubeconfig \
-            --overwrite-existing
-
-          echo "Encoding kubeconfig to base64..."
-          KUBE64=$(base64 -w0 kubeconfig)
-          echo "::set-output name=kube_config_data::$KUBE64"
-          echo "✅ Kubeconfig exported successfully."
-
-  deploy_ingress:
-    name: Deploy Ingress NGINX
+  deploy:
     runs-on: ubuntu-latest
-    needs: terraform_apply
-    env:
-      KUBE_CONFIG_DATA: ${{ needs.terraform_apply.outputs.kube_config_data }}
-    outputs:
-      lb_ip: ${{ steps.lb_ip.outputs.ip }}
+    needs: terraform
+    environment: production
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
-      
-      - name: Azure Login
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-      
-      - name: Set AKS Context
-        uses: azure/aks-set-context@v3
-        with:
-          resource-group: rg-group1-austriaeast
-          cluster-name: grp1-aks
-      
-      - name: Install Helm
-        run: |
-          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-          helm version
-      
 
-      - name: Install/Upgrade Ingress NGINX
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          printf '%s\n' "${{ needs.terraform.outputs.kubeconfig }}" > ~/.kube/config
+          chmod 600 ~/.kube/config
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Install Secrets Store CSI driver
+        run: |
+          helm repo add secrets-store-csi-driver https://kubernetes-sigs.github.io/secrets-store-csi-driver/charts
+          helm repo update
+          helm upgrade --install csi-secrets-store secrets-store-csi-driver/secrets-store-csi-driver \
+            --namespace kube-system \
+            --set secrets-store.csi.enableSecretRotation=true \
+            --set linux.privileged=true
+
+      - name: Install/upgrade Ingress NGINX controller
         run: |
           helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
           helm repo update
-          
-          # Check if Ingress NGINX is already installed
-          if helm list -n ingress-nginx | grep -q grp1-ingress; then
-            echo "🌐 Ingress NGINX already installed, upgrading..."
-            helm upgrade grp1-ingress ingress-nginx/ingress-nginx \
-              --namespace ingress-nginx \
-              --wait \
-              --timeout=10m \
-              --set controller.ingressClassResource.controllerValue="k8s.io/ingress-nginx" \
-              --set controller.ingressClassByName=true \
-              --set controller.service.type=LoadBalancer \
-              --set controller.service.externalTrafficPolicy=Local
-            echo "✅ Ingress NGINX upgraded successfully"
-          else
-            echo "🌐 Installing Ingress NGINX..."
-            helm install grp1-ingress ingress-nginx/ingress-nginx \
-              --namespace ingress-nginx \
-              --create-namespace \
-              --wait \
-              --timeout=10m \
-              --set controller.ingressClassResource.controllerValue="k8s.io/ingress-nginx" \
-              --set controller.ingressClassByName=true \
-              --set controller.service.type=LoadBalancer \
-              --set controller.service.externalTrafficPolicy=Local
-            echo "✅ Ingress NGINX installed successfully"
-          fi
-      
-      - name: Wait for LoadBalancer IP
-        id: lb_ip
-        run: |
-          echo "🔍 Checking for existing LoadBalancer IP..."
-          
-          # Check if LoadBalancer already has an IP
-          LB_IP=$(kubectl get svc grp1-ingress-ingress-nginx-controller -n ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
-          
-          if [ -n "$LB_IP" ] && [ "$LB_IP" != "null" ] && [ "$LB_IP" != "None" ] && [ "$LB_IP" != "" ]; then
-            echo "✅ LoadBalancer IP already exists: $LB_IP"
-            echo "ip=$LB_IP" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-          
-          echo "⏳ Waiting for new LoadBalancer IP..."
-          timeout=600  # 10 minutes timeout
-          elapsed=0
-          while [ $elapsed -lt $timeout ]; do
-            LB_IP=$(kubectl get svc grp1-ingress-ingress-nginx-controller -n ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
-            if [ -n "$LB_IP" ] && [ "$LB_IP" != "null" ] && [ "$LB_IP" != "None" ] && [ "$LB_IP" != "" ]; then
-              echo "✅ LoadBalancer IP obtained: $LB_IP"
-              echo "ip=$LB_IP" >> $GITHUB_OUTPUT
-              exit 0
-            fi
-            echo "⏳ Waiting for IP... ($elapsed seconds)"
-            sleep 15
-            elapsed=$((elapsed + 15))
-          done
-          echo "⚠️ Timeout waiting for LoadBalancer IP after $timeout seconds"
-          echo "Checking service status..."
-          kubectl get svc grp1-ingress-ingress-nginx-controller -n ingress-nginx -o wide
-          exit 1
-      
-      - name: Display LoadBalancer Info
-        run: |
-          kubectl get svc grp1-ingress-ingress-nginx-controller -n ingress-nginx
-          echo "✅ Ingress NGINX installed with IP: ${{ steps.lb_ip.outputs.ip }}"
+          helm upgrade --install grp1-ingress ingress-nginx/ingress-nginx \
+            --namespace ingress-nginx \
+            --create-namespace \
+            --wait \
+            --timeout=600s \
+            --set controller.ingressClassResource.controllerValue="k8s.io/ingress-nginx" \
+            --set controller.ingressClassByName=true \
+            --set controller.service.type=LoadBalancer \
+            --set controller.service.externalTrafficPolicy=Local
 
-  k8s_apply:
-    name: Kubernetes Apply
-    runs-on: ubuntu-latest
-    needs: [terraform_apply, deploy_ingress]
-    env:
-      KUBE_CONFIG_DATA: ${{ needs.terraform_apply.outputs.kube_config_data }}
-      LB_IP: ${{ needs.deploy_ingress.outputs.lb_ip }}
-      K8S_NAMESPACE: app
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Detect k8s manifests
-        id: detect
+      - name: Apply namespaces and config maps
         run: |
-          set -euo pipefail
-          mkdir -p k8s || true
-          
-          # Find only valid Kubernetes manifest files
-          files=$(find k8s -type f \( -name '*.yml' -o -name '*.yaml' \) -size +0c | while read -r file; do
-            if grep -q "apiVersion:" "$file" && grep -q "kind:" "$file"; then
-              echo "$file"
-            fi
-          done | sort || true)
-          
-          if [ -n "$files" ]; then
-            echo "found=true" >> "$GITHUB_OUTPUT"
-            echo "Valid Kubernetes manifests found:"
-            cat <<< "$files"
-          else
-            echo "found=false" >> "$GITHUB_OUTPUT"
-            echo "❌ No valid Kubernetes manifests found, skipping."
-          fi
+          kubectl apply -f k8s/namespace.yaml
+          kubectl apply -f k8s/backend/configmap.yaml
+          kubectl apply -f k8s/frontend/configmap.yaml
 
-      - name: Setup kubectl
-        if: steps.detect.outputs.found == 'true'
-        uses: azure/setup-kubectl@v4
-        with:
-          version: 'v1.30.0'
+      - name: Apply SecretProviderClass and synced secret
+        env:
+          KEY_VAULT_NAME: ${{ needs.terraform.outputs.key_vault_name }}
+          AKS_UAMI_CLIENT_ID: ${{ needs.terraform.outputs.aks_uami_client_id }}
+          AZURE_TENANT_ID: ${{ needs.terraform.outputs.tenant_id }}
+        run: |
+          envsubst < k8s/backend/secretproviderclass.yaml | kubectl apply -f -
+          kubectl apply -f k8s/backend/app-secret.yaml
 
-      # Prepare kubeconfig from dynamic Terraform output
-      - name: Prepare kubeconfig
-        if: steps.detect.outputs.found == 'true'
+      - name: Deploy backend workloads
         run: |
-          mkdir -p ~/.kube
-          echo "${KUBE_CONFIG_DATA}" | base64 -d > ~/.kube/config
-          chmod 600 ~/.kube/config
-          echo "✅ Kubeconfig loaded successfully"
-          kubectl cluster-info
+          kubectl apply -f k8s/backend/service.yaml
+          kubectl apply -f k8s/backend/deployment.yaml
+          kubectl apply -f k8s/backend/backendHPA.yaml
+          kubectl rollout status deployment/app-backend-deployment -n app --timeout=180s
 
-      - name: Ensure app namespace exists
-        if: steps.detect.outputs.found == 'true'
+      - name: Deploy frontend workloads
         run: |
-          if ! kubectl get namespace app > /dev/null 2>&1; then
-            echo "Creating namespace 'app'..."
-            kubectl create namespace app
-          else
-            echo "✅ Namespace 'app' already exists"
-          fi
+          kubectl apply -f k8s/frontend/service.yaml
+          kubectl apply -f k8s/frontend/deployment.yaml
+          kubectl apply -f k8s/frontend/frontendHPA.yaml
+          kubectl rollout status deployment/app-frontend-deployment -n app --timeout=180s
 
-      - name: Update Frontend ConfigMap with LB IP
-        if: steps.detect.outputs.found == 'true'
+      - name: Deploy ingress and monitoring
         run: |
-          if [ -z "$LB_IP" ] || [ "$LB_IP" == "null" ]; then
-            echo "❌ LoadBalancer IP is not available"
-            exit 1
-          fi
-          
-          echo "Updating ConfigMap with LoadBalancer IP: $LB_IP"
-          kubectl create configmap frontend-config -n app \
-            --from-literal=VITE_API_BASE_URL="http://$LB_IP.nip.io/app-api" \
-            --dry-run=client -o yaml | kubectl apply -f -
-          
-          echo "✅ Frontend ConfigMap updated with IP: $LB_IP"
+          kubectl apply -f k8s/ingress-controller/ingress-nginx.yaml
+          kubectl apply -f k8s/backend/ingress.yaml
+          kubectl apply -f k8s/frontend/ingress.yaml
+          kubectl apply -f k8s/monitoring/values.yaml
+          kubectl apply -f k8s/monitoring/backend-monitor.yaml
+          kubectl apply -f k8s/monitoring/frontend-monitor.yaml
+          kubectl apply -f k8s/monitoring/alerts.yaml
 
-      - name: Apply/Update Kubernetes manifests
-        if: steps.detect.outputs.found == 'true'
+      - name: Validate cluster health
         run: |
-          set -euo pipefail
-          echo "🔄 Applying/Updating manifests to cluster..."
-
-          if [ -f k8s/namespace.yaml ]; then
-            kubectl apply -f k8s/namespace.yaml
-            echo "✅ Namespace applied/updated"
-          elif [ -f k8s/namespace.yml ]; then
-            kubectl apply -f k8s/namespace.yml
-            echo "✅ Namespace applied/updated"
-          fi
-
-          # Apply manifests excluding non-Kubernetes files
-          echo "🔄 Applying/Updating Kubernetes manifests..."
-          find k8s -name "*.yaml" -o -name "*.yml" | while read -r file; do
-            # Skip files that are not Kubernetes manifests
-            if grep -q "apiVersion:" "$file" && grep -q "kind:" "$file"; then
-              echo "🔄 Applying/Updating $file..."
-              kubectl apply -f "$file" || echo "⚠️ Failed to apply $file, continuing..."
-            else
-              echo "⏭️ Skipping $file (not a Kubernetes manifest)"
-            fi
-          done
-          
-          echo "✅ All manifests applied/updated successfully."
-
-      - name: Verify Deployment Rollouts
-        if: steps.detect.outputs.found == 'true'
-        continue-on-error: true
-        run: |
-          kubectl -n "$K8S_NAMESPACE" get deploy || exit 0
-          kubectl -n "$K8S_NAMESPACE" rollout status deploy --timeout=120s
-
-  deploy_monitoring:
-    name: Deploy Monitoring Stack
-    runs-on: ubuntu-latest
-    needs: [terraform_apply, deploy_ingress]
-    env:
-      KUBE_CONFIG_DATA: ${{ needs.terraform_apply.outputs.kube_config_data }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      
-      - name: Azure Login
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-      
-      - name: Set AKS Context
-        uses: azure/aks-set-context@v3
-        with:
-          resource-group: rg-group1-austriaeast
-          cluster-name: grp1-aks
-      
-      - name: Install Helm
-        run: |
-          curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-          helm version
-      
-      - name: Deploy/Upgrade Monitoring Stack
-        run: |
-          echo "🚀 Deploying/Upgrading Prometheus monitoring stack..."
-          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-          helm repo update
-          
-          # Check if monitoring is already installed
-          if helm list -n monitoring | grep -q kube-prometheus-stack; then
-            echo "📊 Monitoring stack already installed, upgrading..."
-            helm upgrade kube-prometheus-stack prometheus-community/kube-prometheus-stack \
-              --namespace monitoring \
-              --values k8s/monitoring/values.yaml \
-              --wait \
-              --timeout=10m
-            echo "✅ Monitoring stack upgraded successfully"
-          else
-            echo "📊 Installing monitoring stack..."
-            helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
-              --namespace monitoring \
-              --create-namespace \
-              --values k8s/monitoring/values.yaml \
-              --wait \
-              --timeout=10m
-            echo "✅ Monitoring stack deployed successfully"
-          fi
-      
-      - name: Apply Monitoring Manifests
-        run: |
-          echo "📋 Applying ServiceMonitors and PrometheusRules..."
-          
-          # Apply monitoring manifests if they exist
-          if [ -f k8s/monitoring/backend-monitor.yaml ]; then
-            kubectl apply -f k8s/monitoring/backend-monitor.yaml
-            echo "✅ Backend ServiceMonitor applied"
-          fi
-          
-          if [ -f k8s/monitoring/frontend-monitor.yaml ]; then
-            kubectl apply -f k8s/monitoring/frontend-monitor.yaml
-            echo "✅ Frontend ServiceMonitor applied"
-          fi
-          
-          if [ -f k8s/monitoring/alerts.yaml ]; then
-            kubectl apply -f k8s/monitoring/alerts.yaml
-            echo "✅ PrometheusRules applied"
-          fi
-          
-          echo "✅ All monitoring manifests applied"
-      
-      - name: Verify Monitoring Deployment
-        run: |
-          echo "=== 📊 Monitoring Services ==="
-          kubectl get svc -n monitoring
-          echo ""
-          echo "=== 📊 Monitoring Pods ==="
-          kubectl get pods -n monitoring
-          echo ""
-          echo "=== 📊 ServiceMonitors ==="
-          kubectl get servicemonitor -n monitoring
-          echo ""
-          echo "=== 📊 PrometheusRules ==="
-          kubectl get prometheusrule -n monitoring
-          echo ""
-          echo "✅ Monitoring verification completed"
+          kubectl get pods -n app
+          kubectl get ing -A
+          kubectl exec -n app deploy/app-backend-deployment -- ls /mnt/secrets-store

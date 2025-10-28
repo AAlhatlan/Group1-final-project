@@ -3,6 +3,7 @@ locals {
   effective_rg_name   = var.resource_group_name != "" ? var.resource_group_name : "rg-${local.deploy_prefix}"
   effective_location  = var.location
   node_pool_temp_name = substr(replace(local.deploy_prefix, "-", ""), 0, 9)
+  aks_uami_name       = "${local.deploy_prefix}-aks-uami"
 }
 
 data "azurerm_client_config" "current" {}
@@ -10,6 +11,12 @@ data "azurerm_client_config" "current" {}
 resource "azurerm_resource_group" "main" {
   name     = local.effective_rg_name
   location = local.effective_location
+}
+
+resource "azurerm_user_assigned_identity" "aks" {
+  name                = local.aks_uami_name
+  location            = local.effective_location
+  resource_group_name = azurerm_resource_group.main.name
 }
 
 module "storage_account" {
@@ -39,6 +46,7 @@ module "aks" {
   subnet_id                    = module.networking.aks_subnet_id
   temp_node_pool_name          = "${local.node_pool_temp_name}tp"
   userpool_temp_node_pool_name = "${local.node_pool_temp_name}up"
+  user_assigned_identity_id    = azurerm_user_assigned_identity.aks.id
 }
 
 module "sql" {
@@ -80,6 +88,14 @@ module "key_vault" {
       {
         tenant_id               = data.azurerm_client_config.current.tenant_id
         object_id               = module.aks.aks_identity_id
+        certificate_permissions = []
+        key_permissions         = []
+        secret_permissions      = ["Get", "List"]
+        storage_permissions     = []
+      },
+      {
+        tenant_id               = data.azurerm_client_config.current.tenant_id
+        object_id               = azurerm_user_assigned_identity.aks.principal_id
         certificate_permissions = []
         key_permissions         = []
         secret_permissions      = ["Get", "List"]

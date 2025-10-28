@@ -29,6 +29,27 @@ output "aks_identity_client_id" {
   value       = module.aks.aks_identity_client_id
 }
 
+output "aks_kube_config" {
+  description = "Raw kubeconfig for the AKS cluster"
+  value       = module.aks.aks_kube_config
+  sensitive   = true
+}
+
+output "aks_node_resource_group" {
+  description = "Node resource group created for AKS"
+  value       = module.aks.aks_resource_group
+}
+
+output "aks_user_assigned_identity_client_id" {
+  description = "Client ID of the user assigned managed identity attached to AKS"
+  value       = azurerm_user_assigned_identity.aks.client_id
+}
+
+output "aks_user_assigned_identity_principal_id" {
+  description = "Principal ID of the user assigned managed identity attached to AKS"
+  value       = azurerm_user_assigned_identity.aks.principal_id
+}
+
 output "key_vault_id" {
   description = "Resource ID of the Key Vault"
   value       = module.key_vault.key_vault_id
@@ -53,4 +74,9 @@ output "key_vault_secret_ids" {
 output "key_vault_secret_names" {
   description = "Names of Key Vault secrets created by Terraform"
   value       = module.key_vault.secret_names
+}
+
+output "tenant_id" {
+  description = "Azure AD tenant ID used for the deployment"
+  value       = data.azurerm_client_config.current.tenant_id
 }

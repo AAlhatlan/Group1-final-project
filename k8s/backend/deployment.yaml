@@ -18,6 +18,21 @@ spec:
       labels:
         app: backend
     spec:
+      initContainers:
+        - name: wait-for-keyvault-secrets
+          image: mcr.microsoft.com/oss/busybox/busybox:1.36.1
+          command:
+            - sh
+            - -c
+            - |
+              until [ -s /mnt/secrets-store/sql-admin-username ] && [ -s /mnt/secrets-store/sql-admin-password ]; do
+                echo "Waiting for Key Vault secrets to be available..."
+                sleep 5
+              done
+          volumeMounts:
+            - name: backend-secrets
+              mountPath: /mnt/secrets-store
+              readOnly: true
       containers:
         - name: backend
           image: docker.io/aalhatlan/backend:latest
