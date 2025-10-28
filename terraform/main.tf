@@ -19,25 +19,6 @@ module "storage_account" {
   resource_group_name = azurerm_resource_group.main.name
 }
 
-module "key_vault" {
-  source                          = "./modules/key_vault"
-  prefix                          = local.deploy_prefix
-  location                        = local.effective_location
-  resource_group_name             = azurerm_resource_group.main.name
-  tenant_id                       = data.azurerm_client_config.current.tenant_id
-  key_vault_name                  = var.key_vault_name
-  name_suffix                     = var.key_vault_name_suffix
-  sku_name                        = var.key_vault_sku_name
-  soft_delete_retention_days      = var.key_vault_soft_delete_retention_days
-  purge_protection_enabled        = var.key_vault_purge_protection_enabled
-  enabled_for_disk_encryption     = var.key_vault_enabled_for_disk_encryption
-  enabled_for_deployment          = var.key_vault_enabled_for_deployment
-  enabled_for_template_deployment = var.key_vault_enabled_for_template_deployment
-  public_network_access_enabled   = var.key_vault_public_network_access_enabled
-  access_policies                 = var.key_vault_access_policies
-  tags                            = var.key_vault_tags
-}
-
 module "networking" {
   source              = "./modules/networking"
   prefix              = local.deploy_prefix
@@ -68,4 +49,45 @@ module "sql" {
   sql_admin_username  = var.sql_admin
   sql_admin_password  = var.sql_password
   aks_subnet_id       = module.networking.aks_subnet_id
+}
+
+module "key_vault" {
+  source                          = "./modules/key_vault"
+  prefix                          = local.deploy_prefix
+  location                        = local.effective_location
+  resource_group_name             = azurerm_resource_group.main.name
+  tenant_id                       = data.azurerm_client_config.current.tenant_id
+  key_vault_name                  = var.key_vault_name
+  name_suffix                     = var.key_vault_name_suffix
+  sku_name                        = var.key_vault_sku_name
+  soft_delete_retention_days      = var.key_vault_soft_delete_retention_days
+  purge_protection_enabled        = var.key_vault_purge_protection_enabled
+  enabled_for_disk_encryption     = var.key_vault_enabled_for_disk_encryption
+  enabled_for_deployment          = var.key_vault_enabled_for_deployment
+  enabled_for_template_deployment = var.key_vault_enabled_for_template_deployment
+  public_network_access_enabled   = var.key_vault_public_network_access_enabled
+  access_policies = concat(
+    var.key_vault_access_policies,
+    [
+      {
+        tenant_id               = data.azurerm_client_config.current.tenant_id
+        object_id               = module.aks.aks_identity_id
+        certificate_permissions = []
+        key_permissions         = []
+        secret_permissions      = ["Get", "List"]
+        storage_permissions     = []
+      }
+    ]
+  )
+  secrets = {
+    "sql-admin-username" = {
+      value        = var.sql_admin
+      content_type = "text/plain"
+    }
+    "sql-admin-password" = {
+      value        = var.sql_password
+      content_type = "text/plain"
+    }
+  }
+  tags = var.key_vault_tags
 }

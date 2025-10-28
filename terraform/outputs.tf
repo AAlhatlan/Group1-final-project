@@ -43,3 +43,14 @@ output "key_vault_uri" {
   description = "Vault URI endpoint for secrets"
   value       = module.key_vault.key_vault_uri
 }
+
+output "key_vault_secret_ids" {
+  description = "Key Vault secret resource IDs keyed by secret name"
+  value       = module.key_vault.secret_ids
+  sensitive   = true
+}
+
+output "key_vault_secret_names" {
+  description = "Names of Key Vault secrets created by Terraform"
+  value       = module.key_vault.secret_names
+}

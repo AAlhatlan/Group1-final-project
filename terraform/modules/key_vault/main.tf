@@ -38,3 +38,13 @@ resource "azurerm_key_vault" "main" {
     }
   }
 }
+
+resource "azurerm_key_vault_secret" "this" {
+  for_each = var.secrets
+
+  name         = each.key
+  value        = each.value.value
+  key_vault_id = azurerm_key_vault.main.id
+  content_type = try(each.value.content_type, null)
+  tags         = try(each.value.tags, null)
+}

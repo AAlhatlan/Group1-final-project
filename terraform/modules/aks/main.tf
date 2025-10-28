@@ -1,7 +1,7 @@
 # Log Analytics Workspace
 resource "azurerm_log_analytics_workspace" "main" {
   name                = "${var.prefix}-law"
-  location            = "westeurope"      
+  location            = "westeurope"
   resource_group_name = var.resource_group_name
   sku                 = "PerGB2018"
   retention_in_days   = 30
@@ -41,13 +41,13 @@ resource "azurerm_kubernetes_cluster" "aks" {
 }
 
 resource "azurerm_kubernetes_cluster_node_pool" "userpool" {
-  name                  = "userpool"
-  kubernetes_cluster_id = azurerm_kubernetes_cluster.aks.id
-  vm_size               = "Standard_D2s_v3"
-  auto_scaling_enabled  = true
-  min_count             = var.userpool_min_count
-  max_count             = var.userpool_max_count
-  mode                  = "User"
+  name                        = "userpool"
+  kubernetes_cluster_id       = azurerm_kubernetes_cluster.aks.id
+  vm_size                     = "Standard_D2s_v3"
+  auto_scaling_enabled        = true
+  min_count                   = var.userpool_min_count
+  max_count                   = var.userpool_max_count
+  mode                        = "User"
   temporary_name_for_rotation = var.userpool_temp_node_pool_name
 }
 

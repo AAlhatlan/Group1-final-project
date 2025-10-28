@@ -71,16 +71,15 @@ spec:
             limits:
               cpu: "2000m"
               memory: "1Gi"
-          
-      #     volumeMounts:
-      #       - name: backend-secrets
-      #         mountPath: /mnt/secrets-store
-      #         readOnly: true
-      
-      # volumes:
-      #   - name: backend-secrets
-      #     csi:
-      #       driver: secrets-store.csi.k8s.io
-      #       readOnly: true
-      #       volumeAttributes:
-      #         secretProviderClass: backend-sql-secrets
+          volumeMounts:
+            - name: backend-secrets
+              mountPath: /mnt/secrets-store
+              readOnly: true
+
+      volumes:
+        - name: backend-secrets
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: backend-sql-secrets

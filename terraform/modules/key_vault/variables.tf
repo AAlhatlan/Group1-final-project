@@ -101,6 +101,16 @@ variable "access_policies" {
   default = []
 }
 
+variable "secrets" {
+  description = "Map of Key Vault secrets to create."
+  type = map(object({
+    value        = string
+    content_type = optional(string)
+    tags         = optional(map(string))
+  }))
+  default = {}
+}
+
 variable "tags" {
   description = "Tags to apply to the key vault."
   type        = map(string)
