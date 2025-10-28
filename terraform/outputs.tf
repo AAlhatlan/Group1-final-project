@@ -28,3 +28,18 @@ output "aks_identity_client_id" {
   description = "Client ID of the AKS kubelet managed identity"
   value       = module.aks.aks_identity_client_id
 }
+
+output "key_vault_id" {
+  description = "Resource ID of the Key Vault"
+  value       = module.key_vault.key_vault_id
+}
+
+output "key_vault_name" {
+  description = "Name of the Key Vault"
+  value       = module.key_vault.key_vault_name
+}
+
+output "key_vault_uri" {
+  description = "Vault URI endpoint for secrets"
+  value       = module.key_vault.key_vault_uri
+}
