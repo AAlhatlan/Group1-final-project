@@ -127,7 +127,6 @@ jobs:
 
       - name: Deploy ingress and monitoring
         run: |
-          kubectl apply -f k8s/ingress-controller/ingress-nginx.yaml
           kubectl apply -f k8s/backend/ingress.yaml
           kubectl apply -f k8s/frontend/ingress.yaml
           kubectl apply -f k8s/monitoring/values.yaml
