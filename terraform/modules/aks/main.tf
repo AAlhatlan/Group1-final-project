@@ -23,14 +23,15 @@ resource "azurerm_kubernetes_cluster" "aks" {
   }
 
   identity {
-    type                       = "UserAssigned"
-    user_assigned_identity_ids = [var.user_assigned_identity_id]
+    type         = "UserAssigned"
+    identity_ids = [var.user_assigned_identity_id]
   }
 
   key_vault_secrets_provider {
     enabled = true
   }
-
+  
+  
   network_profile {
     network_plugin    = "azure"
     load_balancer_sku = "standard"
@@ -55,4 +56,3 @@ resource "azurerm_kubernetes_cluster_node_pool" "userpool" {
   mode                        = "User"
   temporary_name_for_rotation = var.userpool_temp_node_pool_name
 }
-
