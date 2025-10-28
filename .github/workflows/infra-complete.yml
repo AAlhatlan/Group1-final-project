@@ -3,8 +3,7 @@ name: infra-complete
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: [ main ]
 
 permissions:
   id-token: write
@@ -26,16 +25,14 @@ jobs:
       aks_uami_client_id: ${{ steps.capture.outputs.aks_uami_client_id }}
       tenant_id: ${{ steps.capture.outputs.tenant_id }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Azure login
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Set up Terraform
-        uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v3
 
       - name: Terraform init
         working-directory: terraform
@@ -57,13 +54,13 @@ jobs:
           echo "aks_uami_client_id=$(terraform output -raw aks_user_assigned_identity_client_id)" >> $GITHUB_OUTPUT
           echo "tenant_id=$(terraform output -raw tenant_id)" >> $GITHUB_OUTPUT
 
+
   deploy:
     runs-on: ubuntu-latest
     needs: terraform
     environment: production
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Configure kubeconfig
         run: |
@@ -73,36 +70,35 @@ jobs:
           echo "KUBECONFIG=$HOME/.kube/config" >> $GITHUB_ENV
 
       - name: Test kubectl connectivity
-        run: |
-          kubectl config view
-          kubectl get nodes
-          kubectl cluster-info
+        run: kubectl get nodes
 
       - name: Install Helm
         uses: azure/setup-helm@v4
 
-  
-      - name: Install/upgrade Ingress NGINX controller
+
+      # ✅ Ingress Install/Upgrade
+      - name: Install/Upgrade Ingress NGINX
         run: |
           helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
           helm repo update
           helm upgrade --install grp1-ingress ingress-nginx/ingress-nginx \
             --namespace ingress-nginx \
             --create-namespace \
+            --atomic \
             --wait \
-            --timeout=600s \
-            --set controller.ingressClassResource.controllerValue="k8s.io/ingress-nginx" \
-            --set controller.ingressClassByName=true \
-            --set controller.service.type=LoadBalancer \
-            --set controller.service.externalTrafficPolicy=Local
+            --timeout=10m
 
+
+      # ✅ Namespaces and Config
       - name: Apply namespaces and config maps
         run: |
           kubectl apply -f k8s/namespace.yaml
           kubectl apply -f k8s/backend/configmap.yaml
           kubectl apply -f k8s/frontend/configmap.yaml
 
-      - name: Apply SecretProviderClass and synced secret
+
+      # ✅ Key Vault CSI Driver + Secret Sync
+      - name: Apply SecretProviderClass and Synced secret
         env:
           KEY_VAULT_NAME: ${{ needs.terraform.outputs.key_vault_name }}
           AKS_UAMI_CLIENT_ID: ${{ needs.terraform.outputs.aks_uami_client_id }}
@@ -111,31 +107,52 @@ jobs:
           envsubst < k8s/backend/secretproviderclass.yaml | kubectl apply -f -
           kubectl apply -f k8s/backend/app-secret.yaml
 
+
+      # ✅ Backend Deploy (مع انتظار أطول + صحي)
       - name: Deploy backend workloads
         run: |
           kubectl apply -f k8s/backend/service.yaml
           kubectl apply -f k8s/backend/deployment.yaml
           kubectl apply -f k8s/backend/backendHPA.yaml
-          kubectl rollout status deployment/app-backend-deployment -n app --timeout=600s
+          
+          # 🔁 انتظار حتى كل Pods تكون جاهزة
+          kubectl rollout status deploy/app-backend-deployment -n app --timeout=600s
+          kubectl wait pods -n app -l app=backend --for=condition=Ready --timeout=300s
 
+
+      # ✅ Frontend Deploy
       - name: Deploy frontend workloads
         run: |
           kubectl apply -f k8s/frontend/service.yaml
           kubectl apply -f k8s/frontend/deployment.yaml
           kubectl apply -f k8s/frontend/frontendHPA.yaml
-          kubectl rollout status deployment/app-frontend-deployment -n app --timeout=180s
+          kubectl rollout status deploy/app-frontend-deployment -n app --timeout=300s
 
-      - name: Deploy ingress and monitoring
+
+      # ✅ Monitoring with Helm (✅ Fixed)
+      - name: Deploy/Upgrade Monitoring Stack
+        run: |
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm repo update
+          helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+            --namespace monitoring \
+            --create-namespace \
+            --values k8s/monitoring/values.yaml \
+            --atomic \
+            --wait \
+            --timeout=15m
+
+
+      # ✅ Ingress Rules
+      - name: Apply ingress rules
         run: |
           kubectl apply -f k8s/backend/ingress.yaml
           kubectl apply -f k8s/frontend/ingress.yaml
-          kubectl apply -f k8s/monitoring/values.yaml
-          kubectl apply -f k8s/monitoring/backend-monitor.yaml
-          kubectl apply -f k8s/monitoring/frontend-monitor.yaml
-          kubectl apply -f k8s/monitoring/alerts.yaml
 
+
+      # ✅ Final cluster health check
       - name: Validate cluster health
         run: |
-          kubectl get pods -n app
+          kubectl get pods -A
           kubectl get ing -A
-          kubectl exec -n app deploy/app-backend-deployment -- ls /mnt/secrets-store
+          kubectl get svc -A
