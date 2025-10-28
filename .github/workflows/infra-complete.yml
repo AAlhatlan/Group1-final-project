@@ -81,15 +81,7 @@ jobs:
       - name: Install Helm
         uses: azure/setup-helm@v4
 
-      - name: Install Secrets Store CSI driver
-        run: |
-          helm repo add secrets-store-csi-driver https://kubernetes-sigs.github.io/secrets-store-csi-driver/charts
-          helm repo update
-          helm upgrade --install csi-secrets-store secrets-store-csi-driver/secrets-store-csi-driver \
-            --namespace kube-system \
-            --set secrets-store.csi.enableSecretRotation=true \
-            --set linux.privileged=true
-
+  
       - name: Install/upgrade Ingress NGINX controller
         run: |
           helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
