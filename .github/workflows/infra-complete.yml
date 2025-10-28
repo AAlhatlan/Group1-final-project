@@ -51,9 +51,8 @@ jobs:
         id: capture
         working-directory: terraform
         run: |
-          echo "kubeconfig<<EOF" >> $GITHUB_OUTPUT
-          terraform output -raw aks_kube_config >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          KUBECONFIG_B64=$(terraform output -raw aks_kube_config | base64 | tr -d '\n')
+          echo "kubeconfig=$KUBECONFIG_B64" >> $GITHUB_OUTPUT
           echo "key_vault_name=$(terraform output -raw key_vault_name)" >> $GITHUB_OUTPUT
           echo "aks_uami_client_id=$(terraform output -raw aks_user_assigned_identity_client_id)" >> $GITHUB_OUTPUT
           echo "tenant_id=$(terraform output -raw tenant_id)" >> $GITHUB_OUTPUT
@@ -69,8 +68,7 @@ jobs:
       - name: Configure kubeconfig
         run: |
           mkdir -p ~/.kube
-          (echo "${{ needs.terraform.outputs.kubeconfig }}" | base64 -d 2>/dev/null) > ~/.kube/config || \
-          echo "${{ needs.terraform.outputs.kubeconfig }}" > ~/.kube/config
+          echo "${{ needs.terraform.outputs.kubeconfig }}" | base64 -d > ~/.kube/config
           chmod 600 ~/.kube/config
           echo "KUBECONFIG=$HOME/.kube/config" >> $GITHUB_ENV
 
