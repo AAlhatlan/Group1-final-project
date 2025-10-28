@@ -23,8 +23,8 @@ resource "azurerm_kubernetes_cluster" "aks" {
   }
 
   identity {
-    type                       = "SystemAssigned, UserAssigned"
-    identity_ids               = [var.user_assigned_identity_id]
+    type         = "UserAssigned"
+    identity_ids = [var.user_assigned_identity_id]
   }
 
   network_profile {
