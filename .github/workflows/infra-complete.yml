@@ -69,8 +69,16 @@ jobs:
       - name: Configure kubeconfig
         run: |
           mkdir -p ~/.kube
-          printf '%s\n' "${{ needs.terraform.outputs.kubeconfig }}" > ~/.kube/config
+          (echo "${{ needs.terraform.outputs.kubeconfig }}" | base64 -d 2>/dev/null) > ~/.kube/config || \
+          echo "${{ needs.terraform.outputs.kubeconfig }}" > ~/.kube/config
           chmod 600 ~/.kube/config
+          echo "KUBECONFIG=$HOME/.kube/config" >> $GITHUB_ENV
+
+      - name: Test kubectl connectivity
+        run: |
+          kubectl config view
+          kubectl get nodes
+          kubectl cluster-info
 
       - name: Install Helm
         uses: azure/setup-helm@v4
