@@ -33,27 +33,27 @@ spec:
             - name: backend-secrets
               mountPath: /mnt/secrets-store
               readOnly: true
+
       containers:
         - name: backend
           image: docker.io/aalhatlan/backend:latest
+
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              export SPRING_DATASOURCE_USERNAME=$(cat /mnt/secrets-store/sql-admin-username) &&
+              export SPRING_DATASOURCE_PASSWORD=$(cat /mnt/secrets-store/sql-admin-password) &&
+              java -jar app.jar
+
           ports:
             - containerPort: 8080
+
           env:
             - name: SPRING_DATASOURCE_URL
               valueFrom:
                 configMapKeyRef:
                   name: app-backend-config
                   key: SPRING_DATASOURCE_URL
-            - name: SPRING_DATASOURCE_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: app-backend-secret
-                  key: DB_USERNAME
-            - name: SPRING_DATASOURCE_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: app-backend-secret
-                  key: DB_PASSWORD
             - name: SPRING_PROFILES_ACTIVE
               valueFrom:
                 configMapKeyRef:
@@ -64,21 +64,21 @@ spec:
                 configMapKeyRef:
                   name: app-backend-config
                   key: SPRING_WEB_CORS_ALLOWED_ORIGINS
-          
+
           livenessProbe:
             httpGet:
               path: /actuator/health
               port: 8080
             initialDelaySeconds: 60
             periodSeconds: 10
-          
+
           readinessProbe:
             httpGet:
               path: /actuator/health
               port: 8080
             initialDelaySeconds: 30
             periodSeconds: 5
-          
+
           resources:
             requests:
               cpu: "250m"
@@ -86,6 +86,7 @@ spec:
             limits:
               cpu: "500m"
               memory: "1Gi"
+
           volumeMounts:
             - name: backend-secrets
               mountPath: /mnt/secrets-store
