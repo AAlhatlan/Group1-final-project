@@ -13,7 +13,7 @@ resource "azurerm_kubernetes_cluster" "aks" {
   location            = var.location
   resource_group_name = var.resource_group_name
   dns_prefix          = "${var.prefix}-dns"
-  
+
   default_node_pool {
     name                        = "default"
     node_count                  = var.node_count
@@ -28,10 +28,11 @@ resource "azurerm_kubernetes_cluster" "aks" {
   }
 
   key_vault_secrets_provider {
-    enabled = true
+    secret_rotation_enabled  = true
+    secret_rotation_interval = "2h"
   }
-  
-  
+
+
   network_profile {
     network_plugin    = "azure"
     load_balancer_sku = "standard"
