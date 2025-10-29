@@ -52,7 +52,7 @@ alertmanager:
     receivers:
     - name: 'slack-alerts'
       slack_configs:
-      - api_url: 'https://hooks.slack.com/services/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'
+      - api_url: "${SLACK_WEBHOOK_URL}"
         channel: '#prometheus-monitoring'
         username: 'Alertmanager'
         icon_emoji: ':bell:'
@@ -62,7 +62,7 @@ alertmanager:
     
     - name: 'slack-critical'
       slack_configs:
-      - api_url: 'https://hooks.slack.com/services/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'
+      - api_url: "${SLACK_WEBHOOK_URL}"
         channel: '#prometheus-monitoring'
         username: 'Alertmanager'
         icon_emoji: ':rotating_light:'
@@ -73,7 +73,7 @@ alertmanager:
     
     - name: 'slack-warnings'
       slack_configs:
-      - api_url: 'https://hooks.slack.com/services/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'
+      - api_url: "${SLACK_WEBHOOK_URL}"
         channel: '#prometheus-monitoring'
         username: 'Alertmanager'
         icon_emoji: ':warning:'
