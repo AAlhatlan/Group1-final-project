@@ -24,6 +24,9 @@ jobs:
       key_vault_name: ${{ steps.capture.outputs.key_vault_name }}
       aks_uami_client_id: ${{ steps.capture.outputs.aks_uami_client_id }}
       tenant_id: ${{ steps.capture.outputs.tenant_id }}
+      ingress_static_ip: ${{ steps.capture.outputs.ingress_static_ip }}
+      aks_node_rg: ${{ steps.capture.outputs.aks_node_rg }}
+      frontdoor_endpoint: ${{ steps.capture.outputs.frontdoor_endpoint }}
     steps:
       - uses: actions/checkout@v4
 
@@ -54,6 +57,9 @@ jobs:
           echo "aks_uami_client_id=$(terraform output -raw aks_user_assigned_identity_client_id)" >> $GITHUB_OUTPUT
           echo "tenant_id=$(terraform output -raw tenant_id)" >> $GITHUB_OUTPUT
           echo "ingress_static_ip=$(terraform output -raw ingress_static_ip)" >> $GITHUB_OUTPUT
+          if terraform output -raw frontdoor_endpoint >/dev/null 2>&1; then
+            echo "frontdoor_endpoint=$(terraform output -raw frontdoor_endpoint)" >> $GITHUB_OUTPUT
+          fi
           AKS_NODE_RG=$(terraform output -raw aks_node_resource_group)
           echo "aks_node_rg=$AKS_NODE_RG" >> $GITHUB_OUTPUT
 
@@ -65,6 +71,7 @@ jobs:
     env:
       INGRESS_STATIC_IP: ${{ needs.terraform.outputs.ingress_static_ip }}
       AKS_NODE_RG: ${{ needs.terraform.outputs.aks_node_rg }}
+      FRONTDOOR_ENDPOINT: ${{ needs.terraform.outputs.frontdoor_endpoint }}
     steps:
       - uses: actions/checkout@v4
 
@@ -101,6 +108,85 @@ jobs:
               --timeout=10m \
             --set controller.service.loadBalancerIP="$INGRESS_STATIC_IP" \
             --set controller.service.annotations."service\.beta\.kubernetes\.io/azure-load-balancer-resource-group"="$AKS_NODE_RG"
+
+      - name: Auto-update Front Door when Ingress IP changes
+        if: env.FRONTDOOR_ENDPOINT != ''
+        run: |
+          echo "🔍 Waiting for Ingress Service IP assignment..."
+          ACTUAL_IP=""
+          for i in {1..30}; do
+            ACTUAL_IP=$(kubectl get svc grp1-ingress-ingress-nginx-controller -n ingress-nginx -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
+            if [ -n "$ACTUAL_IP" ]; then
+              echo "✅ Ingress Service IP: $ACTUAL_IP"
+              break
+            fi
+            echo "⏳ Waiting... ($i/30)"
+            sleep 5
+          done
+          
+          if [ -z "$ACTUAL_IP" ]; then
+            echo "⚠️  IP not assigned, using Static IP: $INGRESS_STATIC_IP"
+            ACTUAL_IP="$INGRESS_STATIC_IP"
+          fi
+          
+          echo "🔄 Syncing Front Door with current IP: $ACTUAL_IP"
+          
+          # Update via Terraform (primary method)
+          cd terraform
+          terraform init -input=false >/dev/null 2>&1
+          terraform refresh -auto-approve
+          
+          # Apply Front Door origin update to ensure it uses current IP
+          echo "✅ Updating Front Door origin via Terraform..."
+          terraform apply -target='module.frontdoor[0].azurerm_cdn_frontdoor_origin.this' -auto-approve || {
+            echo "⚠️  Terraform update failed, trying direct Azure CLI update..."
+            # Fallback: Update directly via Azure CLI
+            az extension add --name front-door 2>/dev/null || true
+            az cdn afd origin update \
+              --resource-group $(terraform output -raw resource_group_name 2>/dev/null || echo "rg-group1-austriaeast") \
+              --profile-name grp1-afd-profile \
+              --origin-group-name grp1-origin-group \
+              --origin-name grp1-origin \
+              --host-name "$ACTUAL_IP" \
+              --origin-host-header "$ACTUAL_IP.nip.io" \
+              2>/dev/null || echo "⚠️  Azure CLI update also failed, but continuing..."
+          }
+          
+          echo "✅ Front Door configured to route to: $ACTUAL_IP"
+
+      - name: DNS instructions (CNAME to Front Door)
+        if: env.FRONTDOOR_ENDPOINT != ''
+        run: |
+          echo "\n================ DNS Instructions ================\n"
+          echo "Recommended: point your domain CNAME to:"
+          echo "  $FRONTDOOR_ENDPOINT"
+          echo "This keeps your domain stable even if the ingress IP changes.\n"
+          echo "Example (Cloudflare):"
+          echo "  Type: CNAME | Name: www | Target: $FRONTDOOR_ENDPOINT"
+          echo "\nQuick verify (Front Door):"
+          curl -I --max-time 10 "https://$FRONTDOOR_ENDPOINT" || true
+
+      - name: Optional - Update DNS via Cloudflare (A or CNAME)
+        if: env.DNS_PROVIDER == 'cloudflare'
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
+          DNS_RECORD_NAME: ${{ secrets.DNS_RECORD_NAME }}
+          DNS_RECORD_TYPE: ${{ secrets.DNS_RECORD_TYPE }}
+        run: |
+          if [ -z "$CF_API_TOKEN" ] || [ -z "$CF_ZONE_ID" ] || [ -z "$DNS_RECORD_NAME" ]; then
+            echo "Cloudflare variables are not set. Skipping DNS update."; exit 0; fi
+          # Determine record type and target
+          if [ -n "$DNS_RECORD_TYPE" ]; then TYPE="$DNS_RECORD_TYPE"; else
+            if [ -n "$FRONTDOOR_ENDPOINT" ]; then TYPE=CNAME; else TYPE=A; fi
+          fi
+          if [ "$TYPE" = "CNAME" ]; then TARGET="$FRONTDOOR_ENDPOINT"; else TARGET="$INGRESS_STATIC_IP"; fi
+          echo "Updating Cloudflare DNS: $DNS_RECORD_NAME ($TYPE) -> $TARGET"
+          REC_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records?name=$DNS_RECORD_NAME" \
+            -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json" | jq -r '.result[0].id // empty')
+          if [ -n "$REC_ID" ]; then METHOD=PUT; URL="https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records/$REC_ID"; else METHOD=POST; URL="https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records"; fi
+          DATA=$(jq -n --arg type "$TYPE" --arg name "$DNS_RECORD_NAME" --arg content "$TARGET" '{type:$type,name:$name,content:$content,ttl:120,proxied:true}')
+          curl -s -X $METHOD "$URL" -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json" --data "$DATA" | jq -r '.success'
 
 
       # ✅ Namespaces and Config

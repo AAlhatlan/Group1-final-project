@@ -124,6 +124,9 @@ resource "azurerm_public_ip" "ingress" {
   allocation_method   = "Static"
   sku                 = "Standard"
   domain_name_label   = var.ingress_static_ip_domain_label != "" ? var.ingress_static_ip_domain_label : null
+  lifecycle {
+    prevent_destroy = true
+  }
   
   tags = {
     environment = local.deploy_prefix
