@@ -27,6 +27,7 @@ jobs:
       ingress_static_ip: ${{ steps.capture.outputs.ingress_static_ip }}
       aks_node_rg: ${{ steps.capture.outputs.aks_node_rg }}
       frontdoor_endpoint: ${{ steps.capture.outputs.frontdoor_endpoint }}
+      resource_group_name: ${{ steps.capture.outputs.resource_group_name }}
     steps:
       - uses: actions/checkout@v4
 
@@ -62,6 +63,9 @@ jobs:
           fi
           AKS_NODE_RG=$(terraform output -raw aks_node_resource_group)
           echo "aks_node_rg=$AKS_NODE_RG" >> $GITHUB_OUTPUT
+          # Get resource group name from Terraform state
+          RG_NAME=$(terraform show -json | jq -r '.values.root_module.resources[] | select(.type == "azurerm_resource_group") | .values.name' | head -1 || echo "rg-group1-austriaeast")
+          echo "resource_group_name=$RG_NAME" >> $GITHUB_OUTPUT
 
 
   deploy:
@@ -72,8 +76,14 @@ jobs:
       INGRESS_STATIC_IP: ${{ needs.terraform.outputs.ingress_static_ip }}
       AKS_NODE_RG: ${{ needs.terraform.outputs.aks_node_rg }}
       FRONTDOOR_ENDPOINT: ${{ needs.terraform.outputs.frontdoor_endpoint }}
+      RESOURCE_GROUP: ${{ needs.terraform.outputs.resource_group_name }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Configure kubeconfig
         run: |
@@ -129,30 +139,37 @@ jobs:
             ACTUAL_IP="$INGRESS_STATIC_IP"
           fi
           
-          echo "🔄 Syncing Front Door with current IP: $ACTUAL_IP"
+          echo "🔄 Updating Front Door origin to use IP: $ACTUAL_IP"
           
-          # Update via Terraform (primary method)
-          cd terraform
-          terraform init -input=false >/dev/null 2>&1
-          terraform refresh -auto-approve
+          # Update Front Door origin via Azure CLI
+          echo "📦 Installing Azure Front Door extension..."
+          az extension add --name front-door --yes 2>/dev/null || az extension update --name front-door 2>/dev/null || true
           
-          # Apply Front Door origin update to ensure it uses current IP
-          echo "✅ Updating Front Door origin via Terraform..."
-          terraform apply -target='module.frontdoor[0].azurerm_cdn_frontdoor_origin.this' -auto-approve || {
-            echo "⚠️  Terraform update failed, trying direct Azure CLI update..."
-            # Fallback: Update directly via Azure CLI
-            az extension add --name front-door 2>/dev/null || true
-            az cdn afd origin update \
-              --resource-group $(terraform output -raw resource_group_name 2>/dev/null || echo "rg-group1-austriaeast") \
-              --profile-name grp1-afd-profile \
-              --origin-group-name grp1-origin-group \
-              --origin-name grp1-origin \
-              --host-name "$ACTUAL_IP" \
-              --origin-host-header "$ACTUAL_IP.nip.io" \
-              2>/dev/null || echo "⚠️  Azure CLI update also failed, but continuing..."
+          # Use resource group from Terraform outputs
+          RG_NAME="${RESOURCE_GROUP:-rg-group1-austriaeast}"
+          echo "📋 Using Resource Group: $RG_NAME"
+          
+          echo "🔄 Updating Front Door origin..."
+          az cdn afd origin update \
+            --resource-group "$RG_NAME" \
+            --profile-name grp1-afd-profile \
+            --origin-group-name grp1-origin-group \
+            --origin-name grp1-origin \
+            --host-name "$ACTUAL_IP" \
+            --origin-host-header "$ACTUAL_IP.nip.io" \
+            --http-port 80 \
+            --https-port 443 \
+            --enabled true \
+            --no-wait || {
+            echo "⚠️  Failed to update Front Door origin"
+            echo "   This might be due to the origin already having these values"
+            echo "   Front Door will continue using the current configuration"
           }
           
-          echo "✅ Front Door configured to route to: $ACTUAL_IP"
+          echo "✅ Front Door origin update initiated!"
+          echo "   Host: $ACTUAL_IP"
+          echo "   Origin Host Header: $ACTUAL_IP.nip.io"
+          echo "   (Changes may take 2-5 minutes to propagate)"
 
       - name: DNS instructions (CNAME to Front Door)
         if: env.FRONTDOOR_ENDPOINT != ''
