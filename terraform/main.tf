@@ -115,3 +115,32 @@ module "key_vault" {
   }
   tags = var.key_vault_tags
 }
+
+# Static Public IP for Ingress (in AKS node resource group)
+resource "azurerm_public_ip" "ingress" {
+  name                = "${local.deploy_prefix}-ingress-pip"
+  resource_group_name = module.aks.aks_resource_group
+  location            = local.effective_location
+  allocation_method   = "Static"
+  sku                 = "Standard"
+  domain_name_label   = var.ingress_static_ip_domain_label != "" ? var.ingress_static_ip_domain_label : null
+  
+  tags = {
+    environment = local.deploy_prefix
+    purpose     = "ingress-nginx"
+  }
+}
+
+# Azure Front Door (Standard/Premium) - optional
+module "frontdoor" {
+  source              = "./modules/frontdoor"
+  count               = var.frontdoor_enabled ? 1 : 0
+  prefix              = local.deploy_prefix
+  resource_group_name = azurerm_resource_group.main.name
+  backend_host_name   = var.frontdoor_backend_host_name != "" ? var.frontdoor_backend_host_name : "${azurerm_public_ip.ingress.ip_address}"
+  origin_host_header  = var.frontdoor_origin_host_header != "" ? var.frontdoor_origin_host_header : "${azurerm_public_ip.ingress.ip_address}.nip.io"
+  health_probe_path   = var.frontdoor_health_probe_path
+  tags                = {
+    environment = "${local.deploy_prefix}"
+  }
+}

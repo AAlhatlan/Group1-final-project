@@ -146,3 +146,33 @@ variable "key_vault_tags" {
   type        = map(string)
   default     = {}
 }
+
+variable "frontdoor_enabled" {
+  description = "Enable Azure Front Door"
+  type        = bool
+  default     = true
+}
+
+variable "frontdoor_backend_host_name" {
+  description = "Backend host for Front Door (leave empty to auto-use Static IP + nip.io)"
+  type        = string
+  default     = ""
+}
+
+variable "frontdoor_origin_host_header" {
+  description = "Optional origin host header"
+  type        = string
+  default     = ""
+}
+
+variable "frontdoor_health_probe_path" {
+  description = "Health probe path"
+  type        = string
+  default     = "/"
+}
+
+variable "ingress_static_ip_domain_label" {
+  description = "Optional domain label for Static IP (creates FQDN)"
+  type        = string
+  default     = ""
+}

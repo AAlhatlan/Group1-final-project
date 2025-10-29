@@ -80,3 +80,13 @@ output "tenant_id" {
   description = "Azure AD tenant ID used for the deployment"
   value       = data.azurerm_client_config.current.tenant_id
 }
+
+output "ingress_static_ip" {
+  description = "Static Public IP for Ingress"
+  value       = azurerm_public_ip.ingress.ip_address
+}
+
+output "frontdoor_endpoint" {
+  description = "Azure Front Door endpoint (azurefd.net)"
+  value       = try(module.frontdoor[0].frontdoor_endpoint_hostname, null)
+}

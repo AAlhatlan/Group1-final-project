@@ -53,12 +53,18 @@ jobs:
           echo "key_vault_name=$(terraform output -raw key_vault_name)" >> $GITHUB_OUTPUT
           echo "aks_uami_client_id=$(terraform output -raw aks_user_assigned_identity_client_id)" >> $GITHUB_OUTPUT
           echo "tenant_id=$(terraform output -raw tenant_id)" >> $GITHUB_OUTPUT
+          echo "ingress_static_ip=$(terraform output -raw ingress_static_ip)" >> $GITHUB_OUTPUT
+          AKS_NODE_RG=$(terraform output -raw aks_node_resource_group)
+          echo "aks_node_rg=$AKS_NODE_RG" >> $GITHUB_OUTPUT
 
 
   deploy:
     runs-on: ubuntu-latest
     needs: terraform
     environment: production
+    env:
+      INGRESS_STATIC_IP: ${{ needs.terraform.outputs.ingress_static_ip }}
+      AKS_NODE_RG: ${{ needs.terraform.outputs.aks_node_rg }}
     steps:
       - uses: actions/checkout@v4
 
@@ -71,22 +77,30 @@ jobs:
 
       - name: Test kubectl connectivity
         run: kubectl get nodes
-
+      
       - name: Install Helm
         uses: azure/setup-helm@v4
 
 
+      # ✅ Use Static IP from Terraform
+      - name: Get Static IP from Terraform
+        run: |
+          echo "✅ Using Static IP from Terraform: $INGRESS_STATIC_IP"
+          echo "✅ AKS Node Resource Group: $AKS_NODE_RG"
+
       # ✅ Ingress Install/Upgrade
-      - name: Install/Upgrade Ingress NGINX
+      - name: Install/Upgrade Ingress NGINX (with static IP)
         run: |
           helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
           helm repo update
           helm upgrade --install grp1-ingress ingress-nginx/ingress-nginx \
-            --namespace ingress-nginx \
-            --create-namespace \
+              --namespace ingress-nginx \
+              --create-namespace \
             --atomic \
-            --wait \
-            --timeout=10m
+              --wait \
+              --timeout=10m \
+            --set controller.service.loadBalancerIP="$INGRESS_STATIC_IP" \
+            --set controller.service.annotations."service\.beta\.kubernetes\.io/azure-load-balancer-resource-group"="$AKS_NODE_RG"
 
 
       # ✅ Namespaces and Config
@@ -135,14 +149,14 @@ jobs:
           helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
           helm repo update
           helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
-            --namespace monitoring \
-            --create-namespace \
-            --values k8s/monitoring/values.yaml \
+              --namespace monitoring \
+              --create-namespace \
+              --values k8s/monitoring/values.yaml \
             --atomic \
-            --wait \
+              --wait \
             --timeout=15m
 
-
+      
       # ✅ Ingress Rules
       - name: Apply ingress rules
         run: |
