@@ -7,9 +7,6 @@ aks_vm_size    = "Standard_B2s"
 aks_min_count  = 2
 aks_max_count  = 3
 
-sql_admin    = "sqladmin"
-sql_password = "MyStrongP@ssword123"
-
 key_vault_name_suffix = "keyvault"
 key_vault_sku_name    = "standard"
 

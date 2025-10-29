@@ -49,7 +49,6 @@ variable "aks_max_count" {
 variable "sql_admin" {
   description = "SQL admin username"
   type        = string
-  default     = "sqladmin"
 }
 
 variable "sql_password" {

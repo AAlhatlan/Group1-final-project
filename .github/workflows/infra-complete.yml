@@ -45,6 +45,7 @@ jobs:
       - name: Terraform apply
         working-directory: terraform
         env:
+          TF_VAR_sql_admin: ${{ secrets.SQL_ADMIN_USERNAME }}
           TF_VAR_sql_password: ${{ secrets.SQL_ADMIN_PASSWORD }}
         run: terraform apply -auto-approve
 
