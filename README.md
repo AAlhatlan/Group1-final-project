@@ -172,9 +172,9 @@ Group1-final-project/
 - `/actuator/*` – Spring Boot Actuator endpoints (prometheus enabled)
 
 ## Operations
-- Use `clean-aks.sh` to tear down namespaces, LoadBalancer services, and monitoring CRDs prior to a clean redeploy
-- Retrieve kubeconfig from Terraform output or workflow artifacts (`aks_kube_config`)
-- Update ingress hostnames or allowlists via `k8s/backend/configmap.yaml` and `k8s/frontend/configmap.yaml`
+- Use `clean-aks.sh` to tear down namespaces, LoadBalancer services, and monitoring CRDs prior to a clean redeploy.
+- Retrieve kubeconfig from Terraform output or workflow artifacts (`aks_kube_config`).
+- Update ingress hostnames or allowlists via `k8s/backend/configmap.yaml` and `k8s/frontend/configmap.yaml`.
 
 ## License
 
