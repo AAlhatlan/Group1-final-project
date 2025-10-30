@@ -1,204 +1,117 @@
-# 🍔 Burger Builder - Frontend
+# Burger Builder Frontend
 
-A modern, responsive burger ordering application built with React, TypeScript, and Vite.
+The Burger Builder frontend is a React + TypeScript single-page application that powers the customer experience for Group1's burger ordering platform. It communicates with the Spring Boot API, provides an interactive burger builder, and persists cart activity across sessions.
 
-## Features
-
-- **Interactive Burger Builder**: Visually build custom burgers with drag-and-drop ingredient selection
-- **Smart Cart Management**: Add, remove, and modify burger quantities with real-time price updates
-- **Responsive Design**: Optimized for mobile, tablet, and desktop experiences
-- **Order Management**: Complete checkout flow with customer details and order confirmation
-- **Local Storage Persistence**: Cart data is saved across browser sessions
-- **Modern UI/UX**: Beautiful gradients, smooth animations, and intuitive interface
+## Highlights
+- Ingredient catalogue grouped by category with instant burger preview and pricing
+- Cart, checkout, and order-history flows built with React Router and Context API
+- Graceful offline mode that seeds sample ingredients if the backend API is unreachable
+- Axios client configured through `VITE_API_BASE_URL`, with console logging to make misconfiguration obvious
+- Fully tested with Vitest + Testing Library (19 suites / 46 assertions passing in the latest run)
 
 ## Tech Stack
-
-- **React 18** with **TypeScript**
-- **Vite** for fast development and building
-- **React Router DOM** for navigation
-- **Axios** for API integration
-- **Context API** for state management
-- **CSS Modules** for component styling
+- React 19, React Router DOM 7
+- TypeScript 5.8 with Vite 7 build tooling
+- Axios for HTTP, React Context for shared state
+- CSS Modules for scoped styling
+- Vitest, @testing-library/react, and ESLint 9 for quality gates
 
 ## Project Structure
-
 ```
 frontend/
+├── public/                         # Static assets
 ├── src/
 │   ├── components/
-│   │   ├── BurgerBuilder/    # Burger creation interface
-│   │   ├── Cart/              # Shopping cart functionality
-│   │   ├── Ingredients/       # Ingredient selection UI
-│   │   ├── Layout/            # Header and layout components
-│   │   └── OrderSummary/      # Checkout and order confirmation
-│   ├── context/
-│   │   ├── CartContext.tsx           # Global cart state
-│   │   └── BurgerBuilderContext.tsx  # Burger builder state
-│   ├── services/
-│   │   └── api.ts             # API client and endpoints
-│   ├── types/
-│   │   └── index.ts           # TypeScript interfaces
-│   ├── utils/
-│   │   └── sessionManager.ts # Session ID management
-│   ├── App.tsx                # Main app with routing
-│   ├── App.css
-│   ├── index.css              # Global styles
-│   └── main.tsx               # App entry point
-├── public/
-├── package.json
-├── tsconfig.json
-├── vite.config.ts
+│   │   ├── BurgerBuilder/          # Builder UI + live preview
+│   │   ├── Cart/                   # Cart list, summary, and item cards
+│   │   ├── Ingredients/            # Ingredient grid and cards
+│   │   ├── Layout/                 # Header, navigation shell
+│   │   ├── OrderHistory/           # Past orders view
+│   │   └── OrderSummary/           # Checkout flow
+│   ├── context/                    # CartProvider & BurgerBuilderProvider
+│   ├── services/api.ts             # Axios client + REST helpers
+│   ├── types/                      # Shared TS interfaces
+│   ├── utils/sessionManager.ts     # Session ID persistence utilities
+│   ├── App.tsx / main.tsx          # Routing and bootstrap
+│   └── index.css / App.css         # Global and app-scoped styles
+├── Dockerfile                      # Multi-stage build → Nginx runtime
+├── package.json                    # Scripts and dependencies
+├── vite.config.ts / vitest.config.ts
+├── tsconfig*.json
 └── README.md
 ```
 
-## Getting Started
+## Prerequisites
+- Node.js 20 (or newer LTS) and npm 10+
+- Running backend API (local `http://localhost:8080` or a deployed endpoint)
 
-### Prerequisites
-
-- Node.js (v16 or higher)
-- npm or yarn
-
-### Installation
-
-1. Install dependencies:
+## Setup
 ```bash
 npm install
+cp .env.example .env   # if you keep an example file; otherwise create .env
 ```
 
-2. Create environment variables:
-Create a `.env` file in the root directory (copy from `.env.example`):
+Populate `.env` with the backend URL:
 ```
 VITE_API_BASE_URL=http://localhost:8080
 ```
 
-3. Start the development server:
+Start the dev server:
 ```bash
 npm run dev
 ```
+The app listens on `http://localhost:5173`. The console prints the effective API base URL at startup to confirm connectivity.
 
-The app will be available at `http://localhost:5173`
+## Scripts
+- `npm run dev` – start Vite dev server with hot reload
+- `npm run build` – type-check (`tsc -b`) and build production bundle
+- `npm run preview` – serve the build locally
+- `npm run lint` – ESLint with TypeScript + React rules
+- `npm test` – Vitest in watch mode
+- `npm run test:ui` – Vitest UI runner
+- `npm run test:coverage` – Generate coverage report (V8)
 
-### Available Scripts
+## Testing & Quality
+- 19 test suites / 46 assertions covering contexts, utilities, API client, and core components (`frontend/test-results.json`)
+- Context providers assert correct behavior when used outside a provider, guarding against misuse
+- Coverage and lint tasks run quickly (~seconds) thanks to Vite and Vitest integration
 
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm run preview` - Preview production build
-- `npm run lint` - Run ESLint
-- `npm test` - Run tests in watch mode
-- `npm run test:ui` - Run tests with UI
-- `npm run test:coverage` - Run tests with coverage report
-
-## Testing
-
-The project uses **Vitest** and **React Testing Library** for comprehensive unit testing.
-
-### Test Coverage
-
-- **46 tests** covering:
-  - ✅ Session management utilities (6 tests)
-  - ✅ Cart context operations (11 tests)
-  - ✅ Burger builder context (13 tests)
-  - ✅ Component rendering and interactions (9 tests)
-  - ✅ API service calls (7 tests)
-
-### Running Tests
-
-```bash
-# Run tests in watch mode
-npm test
-
-# Run tests once (CI mode)
-npm test -- --run
-
-# View test UI
-npm run test:ui
-
-# Generate coverage report
-npm run test:coverage
-```
-
-### Test Files
-
-- `src/utils/sessionManager.test.ts` - Session ID generation and clearing
-- `src/context/CartContext.test.tsx` - Cart state management
-- `src/context/BurgerBuilderContext.test.tsx` - Burger building logic
-- `src/components/Ingredients/IngredientCard.test.tsx` - Component rendering
-- `src/services/api.test.ts` - API client functionality
+## Build & Deployment
+- Production build:
+  ```bash
+  npm run build
+  npm run preview   # optional verification
+  ```
+- Docker image (used by Kubernetes deployment):
+  ```bash
+  docker build -t burger-builder-frontend \
+    --build-arg VITE_API_BASE_URL=https://api.example.com \
+    .
+  ```
+- Nginx configuration (`nginx.conf`) supports SPA routing and static asset caching
 
 ## API Integration
+The Axios client in `src/services/api.ts` targets the backend REST API and surfaces helper functions:
+- Ingredients: `GET /api/ingredients`, `/api/ingredients/{category}`
+- Cart: `POST /api/cart/items`, `GET /api/cart/{sessionId}`, `DELETE /api/cart/items/{itemId}`, totals and counts
+- Orders: `POST /api/orders`, `GET /api/orders/{orderId}`, `/history`, `/customer/{email}`, `/session/{sessionId}`, status updates
+- Health: `GET /api/health` (used for manual troubleshooting)
 
-The frontend expects a backend API with the following endpoints:
-
-### Ingredients
-- `GET /api/ingredients` - Get all ingredients
-- `GET /api/ingredients/{category}` - Get ingredients by category
-
-### Cart
-- `POST /api/cart/items` - Add item to cart
-- `GET /api/cart/{sessionId}` - Get cart items
-- `DELETE /api/cart/items/{itemId}` - Remove cart item
-
-### Orders
-- `POST /api/orders` - Create new order
-- `GET /api/orders/{orderId}` - Get order details
-
-## Component Overview
-
-### BurgerBuilder
-The main component for creating custom burgers. Features:
-- Categorized ingredient selection
-- Visual burger preview
-- Real-time price calculation
-- Add to cart functionality
-
-### Cart
-Shopping cart management with:
-- Item quantity controls
-- Remove items
-- Price summary with tax
-- Checkout navigation
-
-### OrderSummary
-Checkout page with:
-- Customer details form
-- Order review
-- Order confirmation
-- Form validation
+Missing or misconfigured APIs trigger a visible banner and switch to sample data so the UI remains demoable.
 
 ## State Management
+- `BurgerBuilderContext` stores selected layers and pricing logic
+- `CartContext` persists cart items to `localStorage`, exposing helpers for totals, counts, quantity adjustments, and clearing
 
-The app uses React Context API for global state:
+## Styling & UX
+- CSS Modules keep component styles scoped
+- Responsive layouts ensure a consistent experience across desktop/tablet/mobile
+- Animations and notifications provide feedback for actions like adding to cart or handling errors
 
-- **CartContext**: Manages shopping cart state and localStorage persistence
-- **BurgerBuilderContext**: Manages burger customization state
-
-## Styling
-
-- Modern gradient backgrounds
-- Smooth animations and transitions
-- Responsive grid layouts
-- Mobile-first design approach
-- Consistent color scheme (purple/blue gradient theme)
-
-## Browser Support
-
-- Chrome (latest)
-- Firefox (latest)
-- Safari (latest)
-- Edge (latest)
-
-## Demo Mode
-
-If the backend API is not available, the app will automatically use sample ingredient data for demonstration purposes.
-
-## Future Enhancements
-
-- User authentication
-- Order history
-- Payment integration
-- Burger templates/favorites
-- Nutritional information
-- Image uploads for custom ingredients
+## Troubleshooting
+- Check the browser console for the logged `API_BASE_URL` – it should match your backend endpoint
+- If ingredient loading fails, the banner indicates the fallback to sample data; verify CORS and API health
+- Ensure the backend exposes CORS origins that include the frontend host (configured via `CORS_ALLOWED_ORIGINS`)
 
 ## License
 

@@ -1,287 +1,181 @@
-# Burger Builder Application
-# Group1.
-# test2
-A full-stack web application for building and ordering custom burgers with a modern React frontend and Spring Boot backend API.
+# Burger Builder Platform
 
-## Project Structure
+Burger Builder is a full-stack ordering experience built by Group1. It couples a responsive React + TypeScript frontend with a Spring Boot API and an automated Azure landing zone (AKS, Azure SQL, Key Vault, optional Front Door) provisioned through Terraform and GitHub Actions.
 
+## Highlights
+- React 19 + Vite 7 SPA with local storage cart persistence and rich burger composition experience
+- Spring Boot 3.2 REST API backed by Azure SQL, Actuator health checks, and Prometheus metrics
+- Terraform-managed Azure footprint (AKS, static ingress IP, user-assigned identity, Key Vault secrets, SQL, storage, optional Front Door)
+- GitHub Actions workflow that provisions infrastructure, deploys workloads to AKS, manages DNS/front-door, and installs monitoring
+
+## Repository Layout
 ```
-capstone_project_ih/
-├── frontend/                 # React + TypeScript + Vite frontend
-│   ├── src/
-│   │   ├── components/      # React components
-│   │   ├── context/         # React Context providers
-│   │   ├── services/        # API service layer
-│   │   ├── types/           # TypeScript type definitions
-│   │   └── utils/           # Utility functions
-│   ├── public/              # Static assets
-│   ├── package.json         # Frontend dependencies
-│   ├── vite.config.ts       # Vite configuration
-│   ├── nginx.conf           # Nginx configuration for production
-│   └── README.md            # Frontend-specific documentation
-├── backend/                 # Spring Boot REST API
-│   ├── src/main/java/com/burgerbuilder/
-│   │   ├── controller/      # REST controllers
-│   │   ├── service/         # Business logic services
-│   │   ├── repository/      # Data access layer
-│   │   ├── entity/          # JPA entities
-│   │   ├── dto/             # Data transfer objects
-│   │   ├── exception/       # Custom exception handling
-│   │   └── config/          # Configuration classes
-│   ├── src/main/resources/
-│   │   ├── application.properties          # Default configuration
-│   │   ├── application-docker.properties   # Docker/PostgreSQL config
-│   │   ├── application-azure.properties    # Azure SQL config
-│   │   ├── schema.sql                      # Database schema
-│   │   └── data.sql                        # Initial data
-│   ├── pom.xml              # Maven dependencies and build config
-│   └── TESTING.md           # Backend testing documentation
-├── environment.env.example  # Environment variables template
-└── environment.env          # Environment variables (create from example)
+Group1-final-project/
+├── backend/                         # Spring Boot API and Dockerfile
+├── frontend/                        # React + TypeScript app and Dockerfile
+├── k8s/
+│   ├── backend/                     # Deployment, HPA, SecretProviderClass, network policy
+│   ├── frontend/                    # Deployment, HPA, ingress, network policy
+│   ├── ingress-controller/          # Helm-based ingress notes
+│   ├── monitoring/                  # kube-prometheus-stack overrides, alerts, ServiceMonitors
+│   └── namespace.yaml               # Application namespace definition
+├── terraform/                       # Azure infrastructure modules, backend, variables
+├── .github/workflows/               # CI/CD workflows (infra-complete.yml)
+├── clean-aks.sh                     # Utility to purge deployed workloads from AKS
+├── environment.env.example          # Backend environment template
+└── README.md                        # This file
 ```
 
-## Frontend Application
+## Application Components
 
-### Tech Stack
+### Frontend (React + Vite)
+- SPA that lets users stack ingredients, view a live burger preview, and push orders to the backend
+- Ingredient catalogue grouped by category with graceful fallback sample data when the API is offline
+- Cart management, checkout, and order history pages backed by React Context and local storage persistence
+- Axios service layer configured via `VITE_API_BASE_URL`
+- Build artifacts served through Nginx; Dockerfile handles multi-stage build
 
-- **Framework**: React 19.1.1
-- **Language**: TypeScript 5.8.3
-- **Build Tool**: Vite 7.1.7
-- **Routing**: React Router DOM 7.9.3
-- **HTTP Client**: Axios 1.12.2
-- **Testing**: Vitest 1.0.4 + Testing Library
-- **Linting**: ESLint 9.36.0
-- **CSS**: Vanilla CSS with CSS modules
+### Backend (Spring Boot)
+- REST endpoints for ingredients, carts, orders, health, and metrics (`/actuator/prometheus`)
+- Spring Data JPA with Azure SQL (production) or PostgreSQL (development) support
+- Key Vault secret consumption through the CSI driver (username/password), with environment overrides from ConfigMaps
+- Horizontal scaling ready via Kubernetes readiness/liveness probes and auto-scaling policies
+- Maven project targeting Java 21 with comprehensive DTO/service/controller layer separation
 
-### Key Features
+### Kubernetes Workloads
+- Namespace-isolated deployments (`app` namespace) with separate manifests for backend and frontend
+- HPAs, PodDisruptionBudgets, and network policies for both tiers
+- Ingress NGINX configured for `/api` (backend) and root path (frontend) with static public IP
+- SecretProviderClass wiring Key Vault secrets into pods, plus synced Kubernetes secret
+- Monitoring stack (Prometheus, Alertmanager, Grafana) installed via Helm with Slack webhook placeholders
 
-- Interactive burger builder with drag-and-drop ingredients
-- Shopping cart management with session persistence
-- Order creation and tracking
-- Order history viewing
-- Responsive design with modern UI/UX
-- Real-time API integration
-- Comprehensive testing coverage
-
-### Backend URL Configuration
-
-The frontend connects to the backend API through the following configuration:
-
-**Location**: `frontend/src/services/api.ts`
-
-```typescript
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
-```
-
-**Required Environment Variable**:
-- `VITE_API_BASE_URL`: The base URL for the backend API (defaults to `http://localhost:8080`)
-
-**Usage**:
-1. Create a `.env` file in the frontend directory
-2. Add: `VITE_API_BASE_URL=http://your-backend-url:8080`
-3. For production: `VITE_API_BASE_URL=https://your-production-api.com`
-
-### Frontend Compilation and Deployment
-
-#### Development Setup
-
-```bash
-cd frontend
-npm install
-npm run dev          # Start development server (http://localhost:5173)
-npm run test         # Run tests
-npm run test:ui      # Run tests with UI
-npm run test:coverage # Run tests with coverage
-npm run lint         # Run ESLint
-```
-
-#### Production Build
-
-```bash
-cd frontend
-npm run build        # Build for production
-npm run preview      # Preview production build locally
-```
-
-The build process:
-1. **TypeScript Compilation**: `tsc -b` compiles TypeScript to JavaScript
-2. **Vite Build**: Bundles and optimizes assets
-3. **Output**: Creates `dist/` folder with production-ready files
-
-#### Deployment Options
-
-**Option 1: Static Hosting (Recommended)**
-- Build the application: `npm run build`
-- Deploy the `dist/` folder to any static hosting service:
-  - Vercel, Netlify, AWS S3, Azure Static Web Apps
-  - Set `VITE_API_BASE_URL` environment variable in hosting platform
-
-**Option 2: Docker with Nginx**
-- The project includes `nginx.conf` for containerized deployment
-- Nginx serves the built React app with optimizations:
-  - Gzip compression
-  - Static asset caching
-  - Security headers
-  - SPA routing support
-
-**Option 3: Traditional Web Server**
-- Upload built files to any web server (Apache, Nginx, IIS)
-- Configure server to serve `index.html` for all routes (SPA support)
-
-## Backend Application
-
-### Tech Stack
-
-- **Framework**: Spring Boot 3.2.0
-- **Language**: Java 21
-- **Build Tool**: Maven
-- **Database**: 
-  - PostgreSQL (Docker/Development)
-  - Azure SQL Database (Production)
-- **ORM**: Spring Data JPA + Hibernate
-- **Validation**: Spring Boot Validation
-- **Utilities**: Lombok
-- **Testing**: Spring Boot Test + H2 Database
-
-### Key Features
-
-- RESTful API for burger ingredients, cart, and orders
-- Session-based cart management
-- Database initialization with sample data
-- CORS configuration for frontend integration
-- Comprehensive error handling
-- Multi-environment configuration support
-
-### Environment Variables Required
-
-The backend requires the following environment variables (defined in `environment.env`):
-
-#### Database Configuration
-- `DB_HOST`: Database server hostname
-- `DB_PORT`: Database port (1433 for SQL Server, 5432 for PostgreSQL)
-- `DB_NAME`: Database name
-- `DB_USERNAME`: Database username
-- `DB_PASSWORD`: Database password
-- `DB_DRIVER`: JDBC driver class name
-
-#### Application Configuration
-- `SPRING_PROFILES_ACTIVE`: Active Spring profile
-  - `docker`: Uses PostgreSQL configuration
-  - `azure`: Uses Azure SQL configuration
-- `SERVER_PORT`: Server port (default: 8080)
-- `CORS_ALLOWED_ORIGINS`: Comma-separated list of allowed CORS origins
-
-#### Example Configuration
-
-```bash
-# For Docker/PostgreSQL Development
-SPRING_PROFILES_ACTIVE=docker
-DB_HOST=database
-DB_PORT=5432
-DB_NAME=burgerbuilder
-DB_USERNAME=postgres
-DB_PASSWORD=YourStrong!Passw0rd
-DB_DRIVER=org.postgresql.Driver
-
-# For Azure SQL Production
-SPRING_PROFILES_ACTIVE=azure
-DB_HOST=your-server.database.windows.net
-DB_PORT=1433
-DB_NAME=burgerbuilder
-DB_USERNAME=your-username
-DB_PASSWORD=your-password
-DB_DRIVER=com.microsoft.sqlserver.jdbc.SQLServerDriver
-```
-
-### Backend Compilation and Deployment
-
-#### Development Setup
-
-```bash
-cd backend
-mvn clean install     # Download dependencies and compile
-mvn spring-boot:run   # Start development server
-```
-
-#### Production Build
-
-```bash
-cd backend
-mvn clean package     # Build JAR file
-```
-
-The build process:
-1. **Dependency Resolution**: Downloads all Maven dependencies
-2. **Compilation**: Compiles Java source code to bytecode
-3. **Testing**: Runs unit and integration tests
-4. **Packaging**: Creates executable JAR file in `target/` directory
-
-#### Deployment Options
-
-**Option 1: JAR File Execution**
-```bash
-java -jar target/burger-builder-backend-1.0.0.jar
-```
-
-**Option 2: Docker Deployment**
-```bash
-# Build Docker image
-docker build -t burger-builder-backend .
-
-# Run with environment variables
-docker run -p 8080:8080 --env-file environment.env burger-builder-backend
-```
-
-**Option 3: Cloud Platform Deployment**
-- **Azure App Service**: Deploy JAR file directly
-- **AWS Elastic Beanstalk**: Upload JAR file
-- **Google Cloud Run**: Containerized deployment
-- **Heroku**: Git-based deployment
-
-#### Environment-Specific Deployment
-
-**Development (PostgreSQL)**:
-1. Set `SPRING_PROFILES_ACTIVE=docker`
-2. Configure PostgreSQL connection variables
-3. Run with Docker Compose or local PostgreSQL
-
-**Production (Azure SQL)**:
-1. Set `SPRING_PROFILES_ACTIVE=azure`
-2. Configure Azure SQL connection variables
-3. Deploy to cloud platform with proper security configuration
-
-## Getting Started
-
-1. **Clone the repository**
-2. **Set up environment variables**:
+## Local Development
+1. Clone the repository and move into the project directory.
+2. Copy the backend environment template:
    ```bash
    cp environment.env.example environment.env
-   # Edit environment.env with your database credentials
    ```
-3. **Start the backend**:
+3. Update `environment.env` with local or cloud database credentials and CORS origins.
+4. Start the backend:
    ```bash
    cd backend
    mvn spring-boot:run
    ```
-4. **Start the frontend**:
+5. Start the frontend (in a new shell):
    ```bash
    cd frontend
    npm install
    npm run dev
    ```
-5. **Access the application**: http://localhost:5173
+6. Browse to `http://localhost:5173` (frontend) with the API available at `http://localhost:8080`.
 
-## API Endpoints
+### Useful Environment Profiles
+- Development: `SPRING_PROFILES_ACTIVE=default` (Azure SQL) or switch to a PostgreSQL profile if required
+- Frontend: create `frontend/.env` with `VITE_API_BASE_URL=http://localhost:8080`
 
-- `GET /api/ingredients` - Get all ingredients
-- `GET /api/ingredients/{category}` - Get ingredients by category
-- `POST /api/cart/items` - Add item to cart
-- `GET /api/cart/{sessionId}` - Get cart items
-- `DELETE /api/cart/items/{itemId}` - Remove cart item
-- `POST /api/orders` - Create order
-- `GET /api/orders/{orderId}` - Get order details
-- `GET /api/orders/history` - Get order history
+## Docker Images
+- Backend: `backend/Dockerfile` (multi-stage Maven build, produces `app.jar`)
+  ```bash
+  docker build -t burger-builder-backend ./backend
+  ```
+- Frontend: `frontend/Dockerfile` (Node build + Nginx runtime)
+  ```bash
+  docker build -t burger-builder-frontend ./frontend
+  ```
+- Kubernetes manifests reference published images `docker.io/aalhatlan/backend:latest` and `docker.io/aalhatlan/fe-final-project:latest`.
+
+## Infrastructure & Deployment
+
+### Terraform (Azure)
+- Remote state stored in Azure Storage (`terraform-backend-rg-gr1/aalhatlanstate001/tfstate`)
+- Modules provision:
+  - Resource group, virtual network, AKS cluster with user-assigned managed identity
+  - Azure SQL server/database with subnet rule
+  - Static public IP for ingress controller
+  - Key Vault (with optional custom name) and seeded SQL credentials
+  - Storage account for general use
+  - Optional Azure Front Door profile and route
+- Usage:
+  ```bash
+  cd terraform
+  az login
+  export TF_VAR_sql_admin=...
+  export TF_VAR_sql_password=...
+  terraform init
+  terraform plan
+  terraform apply
+  ```
+  Adjust `terraform.tfvars` for prefix, region (`austriaeast`), SKU choices, etc.
+
+### GitHub Actions (`infra-complete.yml`)
+- Triggers on pushes to `main` or manual dispatch
+- Job `terraform`:
+  - Logs into Azure using federated identity
+  - Runs `terraform apply`
+  - Exports kubeconfig, Key Vault name, AKS identity, ingress static IP, resource group, optional Front Door endpoint
+- Job `deploy`:
+  - Rehydrates kubeconfig, installs Helm
+  - Installs/updates ingress-nginx using the static IP and node resource group annotation
+  - Optionally updates Azure Front Door origin and prints DNS guidance or updates Cloudflare records
+  - Applies namespaces, ConfigMaps, SecretProviderClass, Kubernetes secrets, backend/frontend workloads, HPAs, ingress rules
+  - Installs/updates `kube-prometheus-stack` with `k8s/monitoring/values.yaml`
+  - Runs final `kubectl get` checks for pods, ingresses, services
+
+### Kubernetes Manifests (`k8s/`)
+- `backend/`: deployment, ClusterIP service, ingress at `/api`, ConfigMap for JDBC settings, SecretProviderClass, network policy, PodDisruptionBudget, HPA, Key Vault validation pod
+- `frontend/`: deployment, ClusterIP service, ingress for `/`, ConfigMap placeholder, network policy, PodDisruptionBudget, HPA
+- `monitoring/`: ServiceMonitors for both workloads, PrometheusRule alerts (latency, error rate, pod health, resource saturation), Grafana dashboards, Alertmanager Slack receivers (requires `SLACK_WEBHOOK_URL`)
+- `namespace.yaml`: defines the `app` namespace with labels to support selectors
+
+### Monitoring Stack
+- Helm chart `prometheus-community/kube-prometheus-stack`
+- Grafana exposed as LoadBalancer with admin password override (`admin123` default)
+- Alertmanager configured for Slack via `${SLACK_WEBHOOK_URL}` (provide via Helm values substitution or GitHub Actions env)
+
+## Environment Variables & Secrets
+
+### Backend (`environment.env`)
+- `SPRING_PROFILES_ACTIVE`
+- `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD`, `DB_DRIVER`
+- `SERVER_PORT`
+- `CORS_ALLOWED_ORIGINS`
+
+### Frontend (`frontend/.env`)
+- `VITE_API_BASE_URL` (points to backend base URL, e.g., `https://<ingress-ip>.nip.io` or `http://localhost:8080`)
+
+### GitHub Secrets (workflow)
+- `AZURE_CREDENTIALS`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`
+- `SQL_ADMIN_USERNAME`, `SQL_ADMIN_PASSWORD`
+- Optional: `CF_API_TOKEN`, `CF_ZONE_ID`, `DNS_RECORD_NAME`, `DNS_RECORD_TYPE`, `SLACK_WEBHOOK_URL`
+
+## Testing
+- Backend: `mvn test` (uses Spring Boot Test + H2)
+- Frontend: `npm run test`, `npm run test:ui`, `npm run test:coverage`
+  - Latest results (`frontend/test-results.json`) show 19 passing suites / 46 assertions
+- Lint frontend with `npm run lint`
+
+## API Overview
+- `GET /api/ingredients` – list all ingredients
+- `GET /api/ingredients/{category}` – list by category
+- `GET /api/ingredients/categories` – list categories
+- `GET /api/ingredients/id/{id}`, `GET /api/ingredients/name/{name}`, `GET /api/ingredients/search?searchTerm=`
+- `POST /api/cart/items` – add to cart
+- `GET /api/cart/{sessionId}` – retrieve cart
+- `DELETE /api/cart/items/{itemId}?sessionId=` – remove item
+- `DELETE /api/cart/{sessionId}` – clear cart
+- `GET /api/cart/{sessionId}/total` and `/count` – totals and counts
+- `POST /api/orders` – create order
+- `GET /api/orders/{orderId}`, `/order-number/{orderNumber}`
+- `GET /api/orders/customer/{email}`, `/session/{sessionId}`, `/status/{status}`, `/history?email=`
+- `PUT /api/orders/{orderId}/status?status=` – update order status
+- `GET /api/health` – health check
+- `/actuator/*` – Spring Boot Actuator endpoints (prometheus enabled)
+
+## Operations
+- Use `clean-aks.sh` to tear down namespaces, LoadBalancer services, and monitoring CRDs prior to a clean redeploy
+- Retrieve kubeconfig from Terraform output or workflow artifacts (`aks_kube_config`)
+- Update ingress hostnames or allowlists via `k8s/backend/configmap.yaml` and `k8s/frontend/configmap.yaml`
 
 ## License
 
-This project is part of a capstone project for educational purposes.
+This project is delivered as part of Group1's capstone and intended for educational use.
