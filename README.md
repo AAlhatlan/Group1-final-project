@@ -127,10 +127,30 @@ Group1-final-project/
 - `monitoring/`: ServiceMonitors for both workloads, PrometheusRule alerts (latency, error rate, pod health, resource saturation), Grafana dashboards, Alertmanager Slack receivers (requires `SLACK_WEBHOOK_URL`)
 - `namespace.yaml`: defines the `app` namespace with labels to support selectors
 
-### Monitoring Stack
-- Helm chart `prometheus-community/kube-prometheus-stack`
-- Grafana exposed as LoadBalancer with admin password override (`admin123` default)
-- Alertmanager configured for Slack via `${SLACK_WEBHOOK_URL}` (provide via Helm values substitution or GitHub Actions env)
+## Monitoring Stack
+
+Production observability using `kube-prometheus-stack` with Prometheus, Grafana, and Alertmanager.
+
+### Components
+- **Prometheus**: 7d retention, scrapes `/actuator/prometheus` (backend) and `/metrics` (frontend)
+- **Grafana**: LoadBalancer with pre-configured dashboards (change default password in production)
+- **Alertmanager**: Slack notifications to `#prometheus-monitoring`
+
+### Dashboards
+Kubernetes Cluster · Kubernetes Pods · Spring Boot · NGINX Ingress
+
+### Alerts
+HighErrorRate · HighLatency · PodDown · PodCrashLooping · HighMemoryUsage · HPAMaxedOut
+
+*Configured in `k8s/monitoring/alerts.yaml` and `k8s/monitoring/{backend,frontend}-monitor.yaml`*
+
+### Access
+```bash
+kubectl port-forward -n monitoring svc/kube-prometheus-stack-prometheus 9090:9090  # Prometheus
+kubectl port-forward -n monitoring svc/kube-prometheus-stack-grafana 3000:80       # Grafana
+```
+
+Set `SLACK_WEBHOOK_URL` in GitHub Secrets for alert notifications.
 
 ## Environment Variables & Secrets
 
